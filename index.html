@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  >
+
+  <title>PLMunTrack Scanner</title>
+
+  <!-- QR Scanner Library -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f4f7f5;
+      color: #222;
+    }
+
+    .header {
+      background: #08752a;
+      color: white;
+      padding: 22px 18px;
+      text-align: center;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .header p {
+      margin: 6px 0 0;
+      font-size: 14px;
+      opacity: 0.95;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 20px 15px 35px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+      margin-bottom: 16px;
+    }
+
+    .title {
+      text-align: center;
+      margin-bottom: 15px;
+    }
+
+    .title h2 {
+      margin: 0 0 5px;
+      font-size: 21px;
+    }
+
+    .title p {
+      margin: 0;
+      color: #666;
+      font-size: 14px;
+    }
+
+    #reader {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+
+    #reader video {
+      border-radius: 12px;
+    }
+
+    .button {
+      width: 100%;
+      border: 0;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+
+    .start {
+      background: #08752a;
+      color: white;
+    }
+
+    .stop {
+      background: #444;
+      color: white;
+      display: none;
+    }
+
+    .status {
+      text-align: center;
+      padding: 12px;
+      margin-top: 12px;
+      border-radius: 10px;
+      background: #f0f0f0;
+      color: #555;
+      font-size: 14px;
+    }
+
+    .result {
+      display: none;
+      text-align: center;
+      border-radius: 14px;
+      padding: 20px;
+      margin-top: 15px;
+    }
+
+    .result.success {
+      display: block;
+      background: #e9f8ee;
+      border: 1px solid #a9dfb9;
+    }
+
+    .result.error {
+      display: block;
+      background: #fff0f0;
+      border: 1px solid #efb0b0;
+    }
+
+    .result-icon {
+      font-size: 45px;
+      margin-bottom: 8px;
+    }
+
+    .result h3 {
+      margin: 0 0 8px;
+      font-size: 22px;
+    }
+
+    .result p {
+      margin: 5px 0;
+      font-size: 15px;
+    }
+
+    .name {
+      font-size: 20px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .instruction {
+      text-align: center;
+      color: #666;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 15px;
+    }
+
+    .spinner {
+      width: 30px;
+      height: 30px;
+      border: 4px solid #ddd;
+      border-top: 4px solid #08752a;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 10px;
+    }
+
+    @keyframes spin {
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .footer {
+      text-align: center;
+      color: #888;
+      font-size: 12px;
+      padding: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="header">
+    <h1>PLMunTrack</h1>
+    <p>QR Code-Based Attendance Management System</p>
+  </div>
+
+  <div class="container">
+
+    <div class="card">
+
+      <div class="title">
+        <h2>📷 Attendance Scanner</h2>
+        <p>Scan the person's QR code</p>
+      </div>
+
+      <div id="reader"></div>
+
+      <button
+        id="startButton"
+        class="button start"
+        onclick="startScanner()"
+      >
+        📷 START SCANNER
+      </button>
+
+      <button
+        id="stopButton"
+        class="button stop"
+        onclick="stopScanner()"
+      >
+        STOP SCANNER
+      </button>
+
+      <div id="status" class="status">
+        Scanner is ready.
+      </div>
+
+      <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <div>Processing attendance...</div>
+      </div>
+
+      <div id="result" class="result"></div>
+
+    </div>
+
+    <div class="card instruction">
+      <strong>How to scan</strong><br><br>
+
+      1. Tap <b>START SCANNER</b>.<br>
+      2. Allow camera permission.<br>
+      3. Point the camera at the PLMunTrack QR code.<br>
+      4. The system will automatically record CHECK IN or CHECK OUT.
+    </div>
+
+  </div>
+
+  <div class="footer">
+    PLMunTrack • Pamantasan ng Lungsod ng Muntinlupa
+  </div>
+
+
+<script>
+
+  /*
+    ==========================================================
+    PLMunTrack Scanner Configuration
+    ==========================================================
+  */
+
+  const APPS_SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbxVd7SWdGueZdKHHt6l1_EUy3wP5e0aMvSNKLpWc1JO_OzkwUrccqaZaJeg2N1viHkCKg/exec";
+
+
+  let html5QrCode = null;
+  let scannerRunning = false;
+  let processingScan = false;
+  let lastScannedValue = "";
+  let lastScanTime = 0;
+
+
+  /*
+    ==========================================================
+    START SCANNER
+    ==========================================================
+  */
+
+  async function startScanner() {
+
+    if (scannerRunning) {
+      return;
+    }
+
+    clearResult();
+
+    setStatus("Opening camera...");
+
+    html5QrCode = new Html5Qrcode("reader");
+
+    const config = {
+      fps: 10,
+
+      qrbox: function(viewfinderWidth, viewfinderHeight) {
+
+        const size = Math.floor(
+          Math.min(viewfinderWidth, viewfinderHeight) * 0.70
+        );
+
+        return {
+          width: size,
+          height: size
+        };
+      },
+
+      aspectRatio: 1.0,
+
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.QR_CODE
+      ]
+    };
+
+
+    try {
+
+      /*
+        Prefer the rear/environment camera.
+      */
+
+      await html5QrCode.start(
+        {
+          facingMode: "environment"
+        },
+        config,
+        onScanSuccess,
+        onScanFailure
+      );
+
+      scannerRunning = true;
+
+      document.getElementById("startButton").style.display = "none";
+      document.getElementById("stopButton").style.display = "block";
+
+      setStatus("Camera active — scan the QR code.");
+
+    } catch (error) {
+
+      console.error(error);
+
+      setStatus(
+        "Camera could not be opened. Please allow camera access in your browser."
+      );
+
+      showError(
+        "CAMERA ERROR",
+        "Please allow camera permission and try again."
+      );
+
+      if (html5QrCode) {
+        try {
+          await html5QrCode.clear();
+        } catch (e) {}
+      }
+
+      html5QrCode = null;
+      scannerRunning = false;
+    }
+  }
+
+
+  /*
+    ==========================================================
+    QR SUCCESS
+    ==========================================================
+  */
+
+  async function onScanSuccess(decodedText, decodedResult) {
+
+    if (!decodedText) {
+      return;
+    }
+
+    const qrValue = String(decodedText).trim();
+
+    if (!qrValue) {
+      return;
+    }
+
+    /*
+      Prevent the same QR from being processed repeatedly
+      while the camera is still seeing it.
+    */
+
+    const now = Date.now();
+
+    if (
+      processingScan ||
+      (
+        qrValue === lastScannedValue &&
+        now - lastScanTime < 5000
+      )
+    ) {
+      return;
+    }
+
+    processingScan = true;
+    lastScannedValue = qrValue;
+    lastScanTime = now;
+
+    setStatus("QR detected. Processing...");
+
+    showLoading(true);
+
+    /*
+      Stop camera temporarily while attendance is processed.
+    */
+
+    await stopScanner(false);
+
+    /*
+      Send QR value to Apps Script.
+    */
+
+    sendQRToAppsScript(qrValue);
+  }
+
+
+  /*
+    ==========================================================
+    SEND QR TO APPS SCRIPT
+    ==========================================================
+  */
+
+  function sendQRToAppsScript(qrValue) {
+
+    /*
+      JSONP is used here so the GitHub HTTPS page can communicate
+      with the Apps Script Web App without browser CORS blocking.
+    */
+
+    const callbackName =
+      "plmunTrackCallback_" +
+      Date.now() +
+      "_" +
+      Math.floor(Math.random() * 100000);
+
+
+    const script = document.createElement("script");
+
+    const encodedQR =
+      encodeURIComponent(qrValue);
+
+    const url =
+      APPS_SCRIPT_URL +
+      "?api=scan" +
+      "&qr=" + encodedQR +
+      "&callback=" + callbackName;
+
+
+    window[callbackName] = function(result) {
+
+      try {
+
+        handleScanResult(result);
+
+      } finally {
+
+        delete window[callbackName];
+
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+
+      }
+    };
+
+
+    script.onerror = function() {
+
+      delete window[callbackName];
+
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+
+      showLoading(false);
+
+      showError(
+        "CONNECTION ERROR",
+        "The scanner could not connect to PLMunTrack."
+      );
+
+      setStatus("Connection failed.");
+
+      processingScan = false;
+    };
+
+
+    document.body.appendChild(script);
+
+
+    /*
+      Safety timeout
+    */
+
+    setTimeout(function() {
+
+      if (window[callbackName]) {
+
+        delete window[callbackName];
+
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+
+        showLoading(false);
+
+        showError(
+          "REQUEST TIMEOUT",
+          "PLMunTrack did not respond. Please try again."
+        );
+
+        setStatus("Request timed out.");
+
+        processingScan = false;
+      }
+
+    }, 15000);
+  }
+
+
+  /*
+    ==========================================================
+    HANDLE APPS SCRIPT RESULT
+    ==========================================================
+  */
+
+  function handleScanResult(result) {
+
+    showLoading(false);
+
+    processingScan = false;
+
+
+    if (!result) {
+
+      showError(
+        "SCAN FAILED",
+        "No response was received from PLMunTrack."
+      );
+
+      setStatus("No response.");
+
+      return;
+    }
+
+
+    /*
+      Successful attendance
+    */
+
+    if (result.success === true) {
+
+      const message =
+        String(result.message || "ATTENDANCE RECORDED");
+
+      const name =
+        result.name ||
+        extractNameFromMessage(message);
+
+      const action =
+        result.action ||
+        extractActionFromMessage(message);
+
+
+      showSuccess(
+        action || "ATTENDANCE RECORDED",
+        name,
+        message
+      );
+
+      setStatus("Attendance recorded successfully.");
+
+      return;
+    }
+
+
+    /*
+      Failed attendance
+    */
+
+    const errorMessage =
+      result.message ||
+      "SCAN FAILED";
+
+
+    showError(
+      "SCAN FAILED",
+      errorMessage
+    );
+
+    setStatus(errorMessage);
+  }
+
+
+  /*
+    ==========================================================
+    EXTRACT NAME / ACTION
+    ==========================================================
+  */
+
+  function extractNameFromMessage(message) {
+
+    if (!message) {
+      return "";
+    }
+
+    const parts = message.split(" - ");
+
+    if (parts.length >= 2) {
+      return parts[0].trim();
+    }
+
+    return "";
+  }
+
+
+  function extractActionFromMessage(message) {
+
+    if (!message) {
+      return "";
+    }
+
+    const upper = message.toUpperCase();
+
+    if (upper.includes("CHECK IN")) {
+      return "CHECK IN";
+    }
+
+    if (upper.includes("CHECK OUT")) {
+      return "CHECK OUT";
+    }
+
+    return "ATTENDANCE";
+  }
+
+
+  /*
+    ==========================================================
+    STOP SCANNER
+    ==========================================================
+  */
+
+  async function stopScanner(showReady = true) {
+
+    if (!html5QrCode) {
+      return;
+    }
+
+    try {
+
+      if (scannerRunning) {
+        await html5QrCode.stop();
+      }
+
+    } catch (error) {
+
+      console.log("Scanner stop:", error);
+
+    }
+
+
+    try {
+
+      await html5QrCode.clear();
+
+    } catch (error) {
+
+      console.log("Scanner clear:", error);
+
+    }
+
+
+    html5QrCode = null;
+    scannerRunning = false;
+
+
+    document.getElementById("startButton").style.display = "block";
+    document.getElementById("stopButton").style.display = "none";
+
+
+    if (showReady) {
+      setStatus("Scanner is ready.");
+    }
+  }
+
+
+  /*
+    ==========================================================
+    QR FAILURE CALLBACK
+    ==========================================================
+  */
+
+  function onScanFailure(error) {
+    /*
+      Ignore normal QR detection failures.
+      html5-qrcode calls this repeatedly while searching.
+    */
+  }
+
+
+  /*
+    ==========================================================
+    SUCCESS DISPLAY
+    ==========================================================
+  */
+
+  function showSuccess(action, name, message) {
+
+    const result =
+      document.getElementById("result");
+
+    result.className = "result success";
+
+    result.innerHTML = `
+      <div class="result-icon">✅</div>
+
+      <h3>${escapeHtml(action)}</h3>
+
+      ${
+        name
+          ? `<div class="name">${escapeHtml(name)}</div>`
+          : ""
+      }
+
+      <p>${escapeHtml(message)}</p>
+    `;
+  }
+
+
+  /*
+    ==========================================================
+    ERROR DISPLAY
+    ==========================================================
+  */
+
+  function showError(title, message) {
+
+    const result =
+      document.getElementById("result");
+
+    result.className = "result error";
+
+    result.innerHTML = `
+      <div class="result-icon">⚠️</div>
+
+      <h3>${escapeHtml(title)}</h3>
+
+      <p>${escapeHtml(message)}</p>
+    `;
+  }
+
+
+  /*
+    ==========================================================
+    CLEAR RESULT
+    ==========================================================
+  */
+
+  function clearResult() {
+
+    const result =
+      document.getElementById("result");
+
+    result.className = "result";
+    result.innerHTML = "";
+  }
+
+
+  /*
+    ==========================================================
+    LOADING
+    ==========================================================
+  */
+
+  function showLoading(show) {
+
+    document.getElementById("loading").style.display =
+      show ? "block" : "none";
+  }
+
+
+  /*
+    ==========================================================
+    STATUS
+    ==========================================================
+  */
+
+  function setStatus(message) {
+
+    document.getElementById("status").textContent =
+      message;
+  }
+
+
+  /*
+    ==========================================================
+    HTML ESCAPE
+    ==========================================================
+  */
+
+  function escapeHtml(value) {
+
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+
+  /*
+    ==========================================================
+    PAGE LOAD
+    ==========================================================
+  */
+
+  window.addEventListener("beforeunload", function() {
+
+    if (html5QrCode && scannerRunning) {
+      html5QrCode.stop().catch(() => {});
+    }
+
+  });
+
+</script>
+
+</body>
+</html>
