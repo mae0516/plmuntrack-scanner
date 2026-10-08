@@ -57,7 +57,7 @@
       background: white;
       border-radius: 16px;
       padding: 18px;
-      box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+      box-shadow: 0 3px 15px rgba(0, 0, 0, 0.08);
       margin-bottom: 16px;
     }
 
@@ -276,15 +276,10 @@
   ===================================================== */
 
   let html5QrCode = null;
-
   let scannerRunning = false;
-
   let processingScan = false;
-
   let lastScannedValue = "";
-
   let lastScanTime = 0;
-
   let requestTimeout = null;
 
 
@@ -302,121 +297,75 @@
 
     setStatus("Opening camera...");
 
-    html5QrCode =
-      new Html5Qrcode("reader");
+    try {
 
+      html5QrCode = new Html5Qrcode("reader");
 
-    const config = {
+      const config = {
+        fps: 10,
 
-      fps: 10,
+        qrbox: function(viewfinderWidth, viewfinderHeight) {
 
-      qrbox: function(
-        viewfinderWidth,
-        viewfinderHeight
-      ) {
-
-        const size =
-          Math.floor(
+          const size = Math.floor(
             Math.min(
               viewfinderWidth,
               viewfinderHeight
             ) * 0.70
           );
 
-        return {
-          width: size,
-          height: size
-        };
+          return {
+            width: size,
+            height: size
+          };
+        },
 
-      },
+        aspectRatio: 1.0,
 
-      aspectRatio: 1.0,
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE
+        ]
+      };
 
-      formatsToSupport: [
-        Html5QrcodeSupportedFormats.QR_CODE
-      ]
-
-    };
-
-
-    try {
-
-      /*
-        IMPORTANT:
-        This is the camera setting that
-        previously worked on the iPhone.
-      */
 
       await html5QrCode.start(
-
         {
           facingMode: "environment"
         },
-
         config,
-
         onScanSuccess,
-
         onScanFailure
-
       );
 
 
       scannerRunning = true;
 
+      document.getElementById("startButton").style.display = "none";
 
-      document.getElementById(
-        "startButton"
-      ).style.display = "none";
+      document.getElementById("stopButton").style.display = "block";
 
-
-      document.getElementById(
-        "stopButton"
-      ).style.display = "block";
-
-
-      setStatus(
-        "Camera active — scan the QR code."
-      );
-
+      setStatus("Camera active — scan the QR code.");
 
     } catch (error) {
 
-      console.error(
-        "Camera error:",
-        error
-      );
-
+      console.error("Camera error:", error);
 
       scannerRunning = false;
 
-
-      setStatus(
-        "Camera could not be opened."
-      );
-
+      setStatus("Camera could not be opened.");
 
       showError(
         "CAMERA ERROR",
         "Please allow camera permission and try again."
       );
 
-
       try {
-
         if (html5QrCode) {
-
           await html5QrCode.clear();
-
         }
-
       } catch (e) {}
 
-
       html5QrCode = null;
-
     }
-
   }
 
 
@@ -424,50 +373,35 @@
      QR SCAN SUCCESS
   ===================================================== */
 
-  async function onScanSuccess(
-    decodedText,
-    decodedResult
-  ) {
+  async function onScanSuccess(decodedText, decodedResult) {
 
     if (!decodedText) {
       return;
     }
 
-
-    const qrValue =
-      String(decodedText).trim();
-
+    const qrValue = String(decodedText).trim();
 
     if (!qrValue) {
       return;
     }
 
-
-    const now =
-      Date.now();
+    const now = Date.now();
 
 
-    /*
-      Prevent multiple scans while
-      current scan is processing.
-    */
+    /* Prevent multiple scans while processing */
 
     if (processingScan) {
       return;
     }
 
 
-    /*
-      Prevent same QR from firing repeatedly.
-    */
+    /* Prevent same QR from firing repeatedly */
 
     if (
       qrValue === lastScannedValue &&
       now - lastScanTime < 5000
     ) {
-
       return;
-
     }
 
 
@@ -478,169 +412,112 @@
     lastScanTime = now;
 
 
-    console.log(
-      "QR DETECTED:",
-      qrValue
-    );
+    console.log("QR DETECTED:", qrValue);
 
-
-    setStatus(
-      "QR detected. Processing..."
-    );
-
+    setStatus("QR detected. Processing...");
 
     showLoading(true);
 
 
-    /*
-      Stop camera before sending
-      attendance request.
-    */
+    /* Stop camera before sending request */
 
     await stopScanner(false);
 
 
-    /*
-      Send QR to Apps Script.
-    */
+    /* Send QR to Apps Script */
 
-    sendQRToAppsScript(
-      qrValue
-    );
-
+    sendQRToAppsScript(qrValue);
   }
 
 
   /* =====================================================
      SEND QR TO APPS SCRIPT
-     USING JSONP
+     JSONP
   ===================================================== */
 
-  function sendQRToAppsScript(
-    qrValue
-  ) {
+  function sendQRToAppsScript(qrValue) {
 
     const callbackName =
       "plmunTrackCallback_" +
       Date.now() +
       "_" +
-      Math.floor(
-        Math.random() * 100000
+      Math.floor(Math.random() * 100000);
+
+
+    const script = document.createElement("script");
+
+
+    /* JSONP callback */
+
+    window[callbackName] = function(result) {
+
+      console.log(
+        "Apps Script response:",
+        result
       );
 
 
-    const script =
-      document.createElement(
-        "script"
-      );
+      if (requestTimeout) {
+
+        clearTimeout(requestTimeout);
+
+        requestTimeout = null;
+      }
 
 
-    /*
-      Global JSONP callback.
-    */
+      try {
 
-    window[callbackName] =
-      function(result) {
+        handleScanResult(result);
 
-        console.log(
-          "Apps Script response:",
-          result
+      } catch (error) {
+
+        console.error(
+          "Response error:",
+          error
         );
 
+        showLoading(false);
 
-        /*
-          Stop timeout immediately.
-        */
+        processingScan = false;
 
-        if (requestTimeout) {
+        showError(
+          "SYSTEM ERROR",
+          "The attendance response could not be processed."
+        );
 
-          clearTimeout(
-            requestTimeout
-          );
-
-          requestTimeout = null;
-
-        }
-
-
-        /*
-          Process response.
-        */
-
-        try {
-
-          handleScanResult(
-            result
-          );
-
-        } catch (error) {
-
-          console.error(
-            "Response error:",
-            error
-          );
+        setStatus(
+          "Response received but could not be processed."
+        );
+      }
 
 
-          showLoading(false);
+      try {
 
-          processingScan = false;
+        delete window[callbackName];
 
-
-          showError(
-            "SYSTEM ERROR",
-            "The attendance response could not be processed."
-          );
+      } catch (e) {}
 
 
-          setStatus(
-            "Response received but could not be processed."
-          );
+      if (script.parentNode) {
 
-        }
+        script.parentNode.removeChild(script);
 
-
-        /*
-          Remove callback.
-        */
-
-        try {
-
-          delete window[
-            callbackName
-          ];
-
-        } catch (e) {}
+      }
+    };
 
 
-        /*
-          Remove script.
-        */
-
-        if (
-          script.parentNode
-        ) {
-
-          script.parentNode.removeChild(
-            script
-          );
-
-        }
-
-      };
-
-
-    /*
-      Encode QR.
-    */
+    /* Encode QR */
 
     const encodedQR =
-      encodeURIComponent(
-        qrValue
-      );
+      encodeURIComponent(qrValue);
 
 
     /*
-      Create request URL.
+      Build Apps Script URL.
+
+      IMPORTANT:
+      & parameters must remain normal URL
+      separators.
     */
 
     const url =
@@ -649,7 +526,7 @@
       "&qr=" +
       encodedQR +
       "&callback=" +
-      callbackName +
+      encodeURIComponent(callbackName) +
       "&t=" +
       Date.now();
 
@@ -660,45 +537,88 @@
     );
 
 
-    /*
-      Network error.
-    */
+    /* Network error */
 
-    script.onerror =
+    script.onerror = function() {
+
+      console.error(
+        "JSONP request failed."
+      );
+
+
+      if (requestTimeout) {
+
+        clearTimeout(requestTimeout);
+
+        requestTimeout = null;
+      }
+
+
+      try {
+
+        delete window[callbackName];
+
+      } catch (e) {}
+
+
+      if (script.parentNode) {
+
+        script.parentNode.removeChild(script);
+
+      }
+
+
+      showLoading(false);
+
+      processingScan = false;
+
+
+      showError(
+        "CONNECTION ERROR",
+        "PLMunTrack could not be reached."
+      );
+
+
+      setStatus(
+        "Connection failed."
+      );
+    };
+
+
+    /* Load request */
+
+    script.src = url;
+
+    script.async = true;
+
+    document.body.appendChild(script);
+
+
+    /* 20 second timeout */
+
+    requestTimeout = setTimeout(
       function() {
 
-        console.error(
-          "JSONP request failed."
-        );
-
-
-        if (requestTimeout) {
-
-          clearTimeout(
-            requestTimeout
-          );
-
-          requestTimeout = null;
-
+        if (!window[callbackName]) {
+          return;
         }
+
+
+        console.error(
+          "Request timeout."
+        );
 
 
         try {
 
-          delete window[
-            callbackName
-          ];
+          delete window[callbackName];
 
         } catch (e) {}
 
 
-        if (
-          script.parentNode
-        ) {
+        if (script.parentNode) {
 
-          script.parentNode.removeChild(
-            script
-          );
+          script.parentNode.removeChild(script);
 
         }
 
@@ -709,103 +629,18 @@
 
 
         showError(
-          "CONNECTION ERROR",
-          "PLMunTrack could not be reached."
+          "REQUEST TIMEOUT",
+          "PLMunTrack did not respond. Please try again."
         );
 
 
         setStatus(
-          "Connection failed."
+          "Request timed out."
         );
 
-      };
-
-
-    /*
-      Set source.
-    */
-
-    script.src = url;
-
-    script.async = true;
-
-
-    /*
-      Add request to page.
-    */
-
-    document.body.appendChild(
-      script
+      },
+      20000
     );
-
-
-    /*
-      20 second timeout.
-    */
-
-    requestTimeout =
-      setTimeout(
-        function() {
-
-          /*
-            If callback already ran,
-            do nothing.
-          */
-
-          if (
-            !window[callbackName]
-          ) {
-
-            return;
-
-          }
-
-
-          console.error(
-            "Request timeout."
-          );
-
-
-          try {
-
-            delete window[
-              callbackName
-            ];
-
-          } catch (e) {}
-
-
-          if (
-            script.parentNode
-          ) {
-
-            script.parentNode.removeChild(
-              script
-            );
-
-          }
-
-
-          showLoading(false);
-
-          processingScan = false;
-
-
-          showError(
-            "REQUEST TIMEOUT",
-            "PLMunTrack did not respond. Please try again."
-          );
-
-
-          setStatus(
-            "Request timed out."
-          );
-
-
-        },
-        20000
-      );
-
   }
 
 
@@ -813,9 +648,7 @@
      HANDLE RESULT
   ===================================================== */
 
-  function handleScanResult(
-    result
-  ) {
+  function handleScanResult(result) {
 
     showLoading(false);
 
@@ -829,14 +662,11 @@
         "No response was received from PLMunTrack."
       );
 
-
       setStatus(
         "No response."
       );
 
-
       return;
-
     }
 
 
@@ -846,13 +676,9 @@
     );
 
 
-    /*
-      SUCCESS
-    */
+    /* SUCCESS */
 
-    if (
-      result.success === true
-    ) {
+    if (result.success === true) {
 
       const message =
         String(
@@ -863,24 +689,17 @@
 
       const name =
         result.name ||
-        extractNameFromMessage(
-          message
-        );
+        extractNameFromMessage(message);
 
 
       const action =
         result.action ||
-        extractActionFromMessage(
-          message
-        );
+        extractActionFromMessage(message);
 
 
       showSuccess(
-        action ||
-        "ATTENDANCE RECORDED",
-
+        action || "ATTENDANCE RECORDED",
         name,
-
         message
       );
 
@@ -891,13 +710,10 @@
 
 
       return;
-
     }
 
 
-    /*
-      FAILED
-    */
+    /* FAILED */
 
     const errorMessage =
       String(
@@ -915,7 +731,6 @@
     setStatus(
       errorMessage
     );
-
   }
 
 
@@ -923,9 +738,7 @@
      EXTRACT NAME
   ===================================================== */
 
-  function extractNameFromMessage(
-    message
-  ) {
+  function extractNameFromMessage(message) {
 
     if (!message) {
       return "";
@@ -933,14 +746,10 @@
 
 
     const parts =
-      message.split(
-        " - "
-      );
+      message.split(" - ");
 
 
-    if (
-      parts.length >= 2
-    ) {
+    if (parts.length >= 2) {
 
       return parts[0].trim();
 
@@ -948,7 +757,6 @@
 
 
     return "";
-
   }
 
 
@@ -956,9 +764,7 @@
      EXTRACT ACTION
   ===================================================== */
 
-  function extractActionFromMessage(
-    message
-  ) {
+  function extractActionFromMessage(message) {
 
     if (!message) {
       return "";
@@ -969,44 +775,28 @@
       message.toUpperCase();
 
 
-    if (
-      upper.includes(
-        "CHECK IN"
-      )
-    ) {
+    if (upper.includes("CHECK IN")) {
 
       return "CHECK IN";
 
     }
 
 
-    if (
-      upper.includes(
-        "CHECK OUT"
-      )
-    ) {
+    if (upper.includes("CHECK OUT")) {
 
       return "CHECK OUT";
 
     }
 
 
-    if (
-      upper.includes(
-        "EXPIRED QR CODE"
-      )
-    ) {
+    if (upper.includes("EXPIRED QR CODE")) {
 
       return "QR EXPIRED";
 
     }
 
 
-    if (
-      upper.includes(
-        "ALREADY COMPLETED"
-      )
-    ) {
+    if (upper.includes("ALREADY COMPLETED")) {
 
       return "ATTENDANCE COMPLETED";
 
@@ -1014,7 +804,6 @@
 
 
     return "ATTENDANCE";
-
   }
 
 
@@ -1022,11 +811,10 @@
      STOP CAMERA
   ===================================================== */
 
-  async function stopScanner(
-    showReady = true
-  ) {
+  async function stopScanner(showReady = true) {
 
     if (!html5QrCode) {
+
       return;
     }
 
@@ -1045,7 +833,6 @@
         "Scanner stop:",
         error
       );
-
     }
 
 
@@ -1059,7 +846,6 @@
         "Scanner clear:",
         error
       );
-
     }
 
 
@@ -1070,14 +856,12 @@
 
     document.getElementById(
       "startButton"
-    ).style.display =
-      "block";
+    ).style.display = "block";
 
 
     document.getElementById(
       "stopButton"
-    ).style.display =
-      "none";
+    ).style.display = "none";
 
 
     if (showReady) {
@@ -1085,9 +869,7 @@
       setStatus(
         "Scanner is ready."
       );
-
     }
-
   }
 
 
@@ -1095,13 +877,10 @@
      QR SCAN FAILURE
   ===================================================== */
 
-  function onScanFailure(
-    error
-  ) {
+  function onScanFailure(error) {
 
     /*
-      Normal QR detection failures
-      are ignored.
+      Normal QR detection failures are ignored.
     */
 
   }
@@ -1118,9 +897,7 @@
   ) {
 
     const result =
-      document.getElementById(
-        "result"
-      );
+      document.getElementById("result");
 
 
     result.className =
@@ -1128,7 +905,6 @@
 
 
     result.innerHTML =
-
       '<div class="result-icon">✅</div>' +
 
       '<h3>' +
@@ -1146,7 +922,6 @@
       '<p>' +
       escapeHtml(message) +
       '</p>';
-
   }
 
 
@@ -1160,9 +935,7 @@
   ) {
 
     const result =
-      document.getElementById(
-        "result"
-      );
+      document.getElementById("result");
 
 
     result.className =
@@ -1170,7 +943,6 @@
 
 
     result.innerHTML =
-
       '<div class="result-icon">⚠️</div>' +
 
       '<h3>' +
@@ -1180,7 +952,6 @@
       '<p>' +
       escapeHtml(message) +
       '</p>';
-
   }
 
 
@@ -1191,18 +962,14 @@
   function clearResult() {
 
     const result =
-      document.getElementById(
-        "result"
-      );
+      document.getElementById("result");
 
 
     result.className =
       "result";
 
 
-    result.innerHTML =
-      "";
-
+    result.innerHTML = "";
   }
 
 
@@ -1210,17 +977,12 @@
      LOADING
   ===================================================== */
 
-  function showLoading(
-    show
-  ) {
+  function showLoading(show) {
 
     document.getElementById(
       "loading"
     ).style.display =
-      show
-        ? "block"
-        : "none";
-
+      show ? "block" : "none";
   }
 
 
@@ -1228,15 +990,12 @@
      STATUS
   ===================================================== */
 
-  function setStatus(
-    message
-  ) {
+  function setStatus(message) {
 
     document.getElementById(
       "status"
     ).textContent =
       message;
-
   }
 
 
@@ -1244,9 +1003,7 @@
      ESCAPE HTML
   ===================================================== */
 
-  function escapeHtml(
-    value
-  ) {
+  function escapeHtml(value) {
 
     return String(value)
 
@@ -1274,7 +1031,6 @@
         /'/g,
         "&#039;"
       );
-
   }
 
 
@@ -1296,9 +1052,7 @@
           .catch(
             () => {}
           );
-
       }
-
     }
   );
 
