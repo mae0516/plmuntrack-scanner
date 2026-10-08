@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+
+  <title>PLMunTrack Scanner</title>
+
+  <script src="https://unpkg.com/html5-qrcode"
+          type="text/javascript"></script>
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f3f5f7;
+      color: #222;
+    }
+
+    .header {
+      background: #08752a;
+      color: white;
+      text-align: center;
+      padding: 22px 15px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 27px;
+    }
+
+    .header p {
+      margin: 6px 0 0;
+      font-size: 13px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: auto;
+      padding: 15px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 15px;
+      box-shadow: 0 3px 12px rgba(0,0,0,.08);
+    }
+
+    .title {
+      text-align: center;
+    }
+
+    .title h2 {
+      margin: 0;
+      font-size: 21px;
+    }
+
+    .instruction {
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      line-height: 1.5;
+      margin: 10px 0 18px;
+    }
+
+    /* CAMERA */
+
+    #reader {
+      width: 100%;
+      max-width: 520px;
+      margin: 15px auto;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #111;
+    }
+
+    #reader video {
+      width: 100% !important;
+      height: auto !important;
+      display: block;
+      object-fit: cover;
+    }
+
+    #reader__dashboard {
+      display: none !important;
+    }
+
+    #reader__scan_region {
+      min-height: 280px;
+    }
+
+    /* OPEN CAMERA */
+
+    #cameraButton {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 16px;
+      background: #08752a;
+      color: white;
+      font-size: 17px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+
+    #cameraButton:disabled {
+      opacity: .6;
+    }
+
+    /* STATUS */
+
+    .status {
+      display: none;
+      padding: 14px;
+      margin-top: 15px;
+      border-radius: 10px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: bold;
+      line-height: 1.5;
+    }
+
+    .info {
+      background: #e8f1ff;
+      color: #1455a0;
+    }
+
+    .success {
+      background: #dff7e5;
+      color: #126b29;
+    }
+
+    .error {
+      background: #ffe0e0;
+      color: #a00000;
+    }
+
+    /* RESULT */
+
+    .result {
+      display: none;
+      margin-top: 16px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid #ddd;
+      background: white;
+    }
+
+    .result-header {
+      background: #08752a;
+      color: white;
+      text-align: center;
+      padding: 14px;
+      font-weight: bold;
+    }
+
+    .result-body {
+      padding: 17px;
+    }
+
+    .person-name {
+      text-align: center;
+      color: #08752a;
+      font-size: 23px;
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+      padding: 10px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .label {
+      color: #777;
+      font-weight: bold;
+    }
+
+    .value {
+      text-align: right;
+      font-weight: bold;
+      word-break: break-word;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: #08752a;
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .footer {
+      text-align: center;
+      color: #777;
+      font-size: 12px;
+      padding: 20px;
+    }
+
+    @media (max-width: 600px) {
+
+      .header h1 {
+        font-size: 23px;
+      }
+
+      .container {
+        padding: 10px;
+      }
+
+      .card {
+        padding: 15px;
+      }
+
+      .person-name {
+        font-size: 21px;
+      }
+
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <div class="header">
+
+    <h1>PLMunTrack</h1>
+
+    <p>
+      QR Code Attendance Scanner
+    </p>
+
+  </div>
+
+
+  <div class="container">
+
+
+    <div class="card">
+
+      <div class="title">
+
+        <h2>
+          📷 Scan Attendance QR
+        </h2>
+
+      </div>
+
+
+      <div class="instruction">
+
+        Point your phone camera at the
+        <b>PLMunTrack QR Code.</b>
+
+        <br>
+
+        The person's information will be
+        automatically retrieved from the
+        <b>People</b> sheet.
+
+      </div>
+
+
+      <!-- CAMERA BUTTON -->
+
+      <button
+        id="cameraButton"
+        onclick="openCamera()">
+
+        📷 OPEN CAMERA
+
+      </button>
+
+
+      <!-- CAMERA -->
+
+      <div id="reader"></div>
+
+
+      <!-- STATUS -->
+
+      <div
+        id="status"
+        class="status">
+      </div>
+
+
+      <!-- RESULT -->
+
+      <div
+        id="result"
+        class="result">
+
+
+        <div class="result-header">
+
+          ✓ ATTENDANCE RECORDED
+
+        </div>
+
+
+        <div class="result-body">
+
+
+          <div
+            id="personName"
+            class="person-name">
+          </div>
+
+
+          <div class="info-row">
+
+            <span class="label">
+              ID
+            </span>
+
+            <span
+              id="personId"
+              class="value">
+            </span>
+
+          </div>
+
+
+          <div class="info-row">
+
+            <span class="label">
+              Type
+            </span>
+
+            <span
+              id="personType"
+              class="value">
+            </span>
+
+          </div>
+
+
+          <div class="info-row">
+
+            <span class="label">
+              Email
+            </span>
+
+            <span
+              id="personEmail"
+              class="value">
+            </span>
+
+          </div>
+
+
+          <div class="info-row">
+
+            <span class="label">
+              Time
+            </span>
+
+            <span
+              id="scanTime"
+              class="value">
+            </span>
+
+          </div>
+
+
+          <div class="info-row">
+
+            <span class="label">
+              Action
+            </span>
+
+            <span
+              id="scanAction"
+              class="value">
+            </span>
+
+          </div>
+
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="card">
+
+      <div class="instruction">
+
+        <b>Automatic Attendance</b>
+
+        <br><br>
+
+        First scan:
+        <b>CHECK IN</b>
+
+        <br>
+
+        Second scan:
+        <b>CHECK OUT</b>
+
+        <br>
+
+        After check-out:
+        <b>Attendance completed for today.</b>
+
+      </div>
+
+    </div>
+
+
+  </div>
+
+
+  <div class="footer">
+
+    PLMunTrack Attendance System
+
+  </div>
+
+
+<script>
+
+  let scanner = null;
+
+  let scannerRunning = false;
+
+  let scanLocked = false;
+
+
+  /* =====================================================
+     AUTOMATIC CAMERA ATTEMPT
+  ===================================================== */
+
+  window.addEventListener(
+    "load",
+    function() {
+
+      setTimeout(
+        function() {
+
+          openCamera();
+
+        },
+        800
+      );
+
+    }
+  );
+
+
+  /* =====================================================
+     OPEN CAMERA
+  ===================================================== */
+
+  async function openCamera() {
+
+    if (scannerRunning) {
+      return;
+    }
+
+
+    const button =
+      document.getElementById(
+        "cameraButton"
+      );
+
+
+    button.disabled = true;
+
+    button.textContent =
+      "📷 OPENING CAMERA...";
+
+
+    showStatus(
+      "Opening your phone camera...",
+      "info"
+    );
+
+
+    try {
+
+      if (!scanner) {
+
+        scanner =
+          new Html5Qrcode(
+            "reader"
+          );
+
+      }
+
+
+      const config = {
+
+        fps: 10,
+
+        qrbox: function(
+          width,
+          height
+        ) {
+
+          const size =
+            Math.floor(
+              Math.min(
+                width,
+                height
+              ) * 0.70
+            );
+
+
+          return {
+            width: size,
+            height: size
+          };
+
+        },
+
+        aspectRatio: 1.0,
+
+        disableFlip: false
+
+      };
+
+
+      /*
+         IMPORTANT:
+
+         We directly start html5-qrcode.
+
+         No extra getUserMedia test.
+      */
+
+      await scanner.start(
+
+        {
+          facingMode: "environment"
+        },
+
+        config,
+
+        function(decodedText) {
+
+          handleScan(
+            decodedText
+          );
+
+        },
+
+        function(errorMessage) {
+
+          /*
+             Ignore normal
+             camera scanning errors.
+          */
+
+        }
+
+      );
+
+
+      scannerRunning = true;
+
+
+      button.style.display =
+        "none";
+
+
+      showStatus(
+        "✓ Camera ready. Point it at the PLMunTrack QR code.",
+        "info"
+      );
+
+
+    } catch (error) {
+
+      console.log(
+        "Camera error:",
+        error
+      );
+
+
+      scannerRunning = false;
+
+
+      button.disabled = false;
+
+      button.textContent =
+        "📷 OPEN CAMERA";
+
+
+      showStatus(
+
+        "Camera could not be opened. " +
+        "Please allow camera access for this browser, then tap OPEN CAMERA again.",
+
+        "error"
+
+      );
+
+    }
+
+  }
+
+
+  /* =====================================================
+     HANDLE SCAN
+  ===================================================== */
+
+  function handleScan(
+    decodedText
+  ) {
+
+    if (scanLocked) {
+      return;
+    }
+
+
+    scanLocked = true;
+
+
+    showStatus(
+      "QR detected. Checking attendance...",
+      "info"
+    );
+
+
+    google.script.run
+
+      .withSuccessHandler(
+        function(result) {
+
+
+          if (!result) {
+
+            scanLocked = false;
+
+            showStatus(
+              "QR could not be processed.",
+              "error"
+            );
+
+            return;
+
+          }
+
+
+          if (result.ok) {
+
+            showResult(
+              result
+            );
+
+
+            setTimeout(
+              function() {
+
+                scanLocked = false;
+
+                hideResult();
+
+              },
+              5000
+            );
+
+
+          } else {
+
+            showStatus(
+
+              "✕ " +
+              escapeHtml(
+                result.message ||
+                "SCAN FAILED"
+              ),
+
+              "error"
+
+            );
+
+
+            setTimeout(
+              function() {
+
+                scanLocked = false;
+
+              },
+              2500
+            );
+
+          }
+
+        }
+      )
+
+      .withFailureHandler(
+        function(error) {
+
+
+          scanLocked = false;
+
+
+          showStatus(
+
+            "✕ Unable to process the QR code.",
+
+            "error"
+
+          );
+
+          console.log(error);
+
+        }
+      )
+
+      .scanQR(
+        decodedText
+      );
+
+  }
+
+
+  /* =====================================================
+     SHOW RESULT
+  ===================================================== */
+
+  function showResult(
+    result
+  ) {
+
+
+    document.getElementById(
+      "personName"
+    ).textContent =
+      result.name || "-";
+
+
+    document.getElementById(
+      "personId"
+    ).textContent =
+      result.externalId ||
+      result.personId ||
+      "-";
+
+
+    document.getElementById(
+      "personType"
+    ).textContent =
+      result.type ||
+      "-";
+
+
+    document.getElementById(
+      "personEmail"
+    ).textContent =
+      result.email ||
+      "-";
+
+
+    document.getElementById(
+      "scanTime"
+    ).textContent =
+      result.time ||
+      "-";
+
+
+    document.getElementById(
+      "scanAction"
+    ).innerHTML =
+
+      '<span class="badge">' +
+
+      escapeHtml(
+        result.action ||
+        "-"
+      ) +
+
+      '</span>';
+
+
+    document.getElementById(
+      "result"
+    ).style.display =
+      "block";
+
+
+    showStatus(
+
+      "✓ " +
+      escapeHtml(
+        result.action ||
+        "ATTENDANCE"
+      ) +
+      " recorded successfully.",
+
+      "success"
+
+    );
+
+  }
+
+
+  /* =====================================================
+     HIDE RESULT
+  ===================================================== */
+
+  function hideResult() {
+
+    document.getElementById(
+      "result"
+    ).style.display =
+      "none";
+
+  }
+
+
+  /* =====================================================
+     STATUS
+  ===================================================== */
+
+  function showStatus(
+    message,
+    type
+  ) {
+
+    const status =
+      document.getElementById(
+        "status"
+      );
+
+
+    status.innerHTML =
+      message;
+
+
+    status.className =
+      "status " +
+      type;
+
+
+    status.style.display =
+      "block";
+
+  }
+
+
+  /* =====================================================
+     ESCAPE HTML
+  ===================================================== */
+
+  function escapeHtml(
+    value
+  ) {
+
+    return String(
+      value || ""
+    )
+
+      .replace(
+        /&/g,
+        "&amp;"
+      )
+
+      .replace(
+        /</g,
+        "&lt;"
+      )
+
+      .replace(
+        />/g,
+        "&gt;"
+      )
+
+      .replace(
+        /"/g,
+        "&quot;"
+      )
+
+      .replace(
+        /'/g,
+        "&#039;"
+      );
+
+  }
+
+
+  /* =====================================================
+     STOP CAMERA
+  ===================================================== */
+
+  window.addEventListener(
+    "beforeunload",
+    function() {
+
+      if (
+        scanner &&
+        scannerRunning
+      ) {
+
+        scanner
+          .stop()
+          .catch(
+            function() {}
+          );
+
+      }
+
+    }
+  );
+
+</script>
+
+</body>
+</html>
