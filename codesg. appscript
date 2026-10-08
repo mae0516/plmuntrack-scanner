@@ -1,0 +1,2381 @@
+/*******************************************************
+ * PLMunTrack
+ * QR Code-Based Attendance Management System
+ *
+ * IMPORTANT ATTENDANCE RULE:
+ * 1st scan  = CHECK IN
+ * 2nd scan  = CHECK OUT on SAME ROW
+ * 3rd scan  = ATTENDANCE ALREADY COMPLETED FOR TODAY
+ *******************************************************/
+
+
+/* =====================================================
+   SHEETS
+===================================================== */
+
+const SHEETS = {
+  PEOPLE: "People",
+  QR: "QR_Tokens",
+  ATTENDANCE: "Attendance",
+  ADMINS: "Admins",
+  AUDIT: "Audit"
+};
+
+
+/* =====================================================
+   HEADERS
+===================================================== */
+
+const HEADERS = {
+
+  PEOPLE: [
+    "Person ID",
+    "Name",
+    "Type",
+    "Email",
+    "Student/Visitor ID",
+    "Course",
+    "Year",
+    "Section",
+    "Status"
+  ],
+
+  QR: [
+    "QR ID",
+    "Person ID",
+    "Date",
+    "Token",
+    "Status"
+  ],
+
+  ATTENDANCE: [
+    "Scan ID",
+    "Date",
+    "Time",
+    "QR ID",
+    "Person ID",
+    "Name",
+    "Type",
+    "Email",
+    "Check-In",
+    "Check-Out",
+    "Status",
+    "Scanner Account"
+  ],
+
+  ADMINS: [
+    "Admin ID",
+    "Name",
+    "Email",
+    "Role",
+    "Status"
+  ],
+
+  AUDIT: [
+    "Audit ID",
+    "Date",
+    "Time",
+    "Action",
+    "Person ID",
+    "QR ID",
+    "Details",
+    "Scanner/Admin"
+  ]
+};
+
+
+/* =====================================================
+   DO GET
+===================================================== */
+
+function doGet(e) {
+
+  e = e || {};
+
+  const params = e.parameter || {};
+
+  /*
+    API:
+    /exec?api=scan&qr=XXXXX&callback=NAME
+  */
+
+  if (params.api === "scan") {
+
+    const qrValue =
+      String(params.qr || "").trim();
+
+    let result;
+
+    try {
+
+      result = scanQR(qrValue);
+
+    } catch (error) {
+
+      result = {
+        success: false,
+        action: "FAILED",
+        message: error.message || String(error)
+      };
+
+    }
+
+
+    /*
+      JSONP response
+    */
+
+    if (params.callback) {
+
+      const callback =
+        String(params.callback)
+          .replace(/[^a-zA-Z0-9_$]/g, "");
+
+      return ContentService
+        .createTextOutput(
+          callback +
+          "(" +
+          JSON.stringify(result) +
+          ");"
+        )
+        .setMimeType(
+          ContentService.MimeType.JAVASCRIPT
+        );
+    }
+
+
+    /*
+      Normal JSON response
+    */
+
+    return ContentService
+      .createTextOutput(
+        JSON.stringify(result)
+      )
+      .setMimeType(
+        ContentService.MimeType.JSON
+      );
+  }
+
+
+  /*
+    API: People
+  */
+
+  if (params.api === "people") {
+
+    return ContentService
+      .createTextOutput(
+        JSON.stringify(getPeople())
+      )
+      .setMimeType(
+        ContentService.MimeType.JSON
+      );
+  }
+
+
+  /*
+    API: Active People
+  */
+
+  if (params.api === "activePeople") {
+
+    return ContentService
+      .createTextOutput(
+        JSON.stringify(getActivePeople())
+      )
+      .setMimeType(
+        ContentService.MimeType.JSON
+      );
+  }
+
+
+  /*
+    API: Today's Attendance
+  */
+
+  if (params.api === "attendance") {
+
+    return ContentService
+      .createTextOutput(
+        JSON.stringify(getTodayAttendance())
+      )
+      .setMimeType(
+        ContentService.MimeType.JSON
+      );
+  }
+
+
+  /*
+    Normal website
+  */
+
+  setupSheets_();
+
+  return HtmlService
+    .createTemplateFromFile("Index")
+    .evaluate()
+    .setTitle(
+      "PLMunTrack QR Attendance"
+    )
+    .setXFrameOptionsMode(
+      HtmlService.XFrameOptionsMode.ALLOWALL
+    );
+}
+
+
+/* =====================================================
+   DO POST
+===================================================== */
+
+function doPost(e) {
+
+  try {
+
+    const data =
+      e && e.postData
+        ? JSON.parse(e.postData.contents || "{}")
+        : {};
+
+    if (data.action === "scan") {
+
+      return ContentService
+        .createTextOutput(
+          JSON.stringify(
+            scanQR(
+              String(data.qr || "").trim()
+            )
+          )
+        )
+        .setMimeType(
+          ContentService.MimeType.JSON
+        );
+    }
+
+
+    if (data.action === "register") {
+
+      return ContentService
+        .createTextOutput(
+          JSON.stringify(
+            registerPerson(data.formData || data)
+          )
+        )
+        .setMimeType(
+          ContentService.MimeType.JSON
+        );
+    }
+
+
+    return ContentService
+      .createTextOutput(
+        JSON.stringify({
+          success: false,
+          message: "INVALID ACTION"
+        })
+      )
+      .setMimeType(
+        ContentService.MimeType.JSON
+      );
+
+  } catch (error) {
+
+    return ContentService
+      .createTextOutput(
+        JSON.stringify({
+          success: false,
+          message: error.message || String(error)
+        })
+      )
+      .setMimeType(
+        ContentService.MimeType.JSON
+      );
+  }
+}
+
+
+/* =====================================================
+   SETUP SHEETS
+===================================================== */
+
+function setupSheets_() {
+
+  const ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  createSheetIfMissing_(
+    ss,
+    SHEETS.PEOPLE,
+    HEADERS.PEOPLE
+  );
+
+  createSheetIfMissing_(
+    ss,
+    SHEETS.QR,
+    HEADERS.QR
+  );
+
+  createSheetIfMissing_(
+    ss,
+    SHEETS.ATTENDANCE,
+    HEADERS.ATTENDANCE
+  );
+
+  createSheetIfMissing_(
+    ss,
+    SHEETS.ADMINS,
+    HEADERS.ADMINS
+  );
+
+  createSheetIfMissing_(
+    ss,
+    SHEETS.AUDIT,
+    HEADERS.AUDIT
+  );
+}
+
+
+/* =====================================================
+   CREATE SHEET IF MISSING
+===================================================== */
+
+function createSheetIfMissing_(
+  ss,
+  sheetName,
+  headers
+) {
+
+  let sheet =
+    ss.getSheetByName(sheetName);
+
+
+  if (!sheet) {
+
+    sheet =
+      ss.insertSheet(sheetName);
+
+  }
+
+
+  if (sheet.getLastRow() === 0) {
+
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        headers.length
+      )
+      .setValues([headers]);
+
+  } else {
+
+    const currentHeaders =
+      sheet
+        .getRange(
+          1,
+          1,
+          1,
+          headers.length
+        )
+        .getValues()[0];
+
+
+    let needsHeader = false;
+
+    for (
+      let i = 0;
+      i < headers.length;
+      i++
+    ) {
+
+      if (
+        String(currentHeaders[i] || "")
+        !== String(headers[i])
+      ) {
+
+        needsHeader = true;
+        break;
+      }
+    }
+
+
+    if (needsHeader) {
+
+      sheet
+        .getRange(
+          1,
+          1,
+          1,
+          headers.length
+        )
+        .setValues([headers]);
+    }
+  }
+
+
+  formatHeader_(sheet);
+}
+
+
+/* =====================================================
+   FORMAT HEADER
+===================================================== */
+
+function formatHeader_(sheet) {
+
+  if (!sheet) {
+    return;
+  }
+
+
+  const lastColumn =
+    sheet.getLastColumn();
+
+
+  if (lastColumn < 1) {
+    return;
+  }
+
+
+  sheet
+    .getRange(
+      1,
+      1,
+      1,
+      lastColumn
+    )
+    .setFontWeight("bold")
+    .setBackground("#08752a")
+    .setFontColor("#ffffff")
+    .setHorizontalAlignment("center");
+
+
+  sheet.setFrozenRows(1);
+
+
+  try {
+
+    sheet.autoResizeColumns(
+      1,
+      lastColumn
+    );
+
+  } catch (e) {}
+}
+
+
+/* =====================================================
+   REGISTER PERSON
+===================================================== */
+
+function registerPerson(formData) {
+
+  setupSheets_();
+
+
+  formData =
+    formData || {};
+
+
+  const name =
+    String(
+      formData.name ||
+      formData.fullName ||
+      ""
+    ).trim();
+
+
+  const type =
+    String(
+      formData.type ||
+      "STUDENT"
+    ).trim().toUpperCase();
+
+
+  const email =
+    String(
+      formData.email || ""
+    ).trim();
+
+
+  const studentVisitorId =
+    String(
+      formData.studentId ||
+      formData.visitorId ||
+      formData.id ||
+      formData.studentVisitorId ||
+      ""
+    ).trim();
+
+
+  const course =
+    String(
+      formData.course || ""
+    ).trim();
+
+
+  const year =
+    String(
+      formData.year || ""
+    ).trim();
+
+
+  const section =
+    String(
+      formData.section || ""
+    ).trim();
+
+
+  if (!name) {
+
+    throw new Error(
+      "NAME IS REQUIRED"
+    );
+  }
+
+
+  if (!studentVisitorId) {
+
+    throw new Error(
+      "STUDENT/VISITOR ID IS REQUIRED"
+    );
+  }
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        SHEETS.PEOPLE
+      );
+
+
+  const data =
+    sheet.getDataRange().getValues();
+
+
+  /*
+    Check duplicate Student/Visitor ID
+  */
+
+  for (
+    let i = 1;
+    i < data.length;
+    i++
+  ) {
+
+    const existingId =
+      String(data[i][4] || "")
+        .trim();
+
+
+    if (
+      existingId &&
+      existingId.toLowerCase()
+      === studentVisitorId.toLowerCase()
+    ) {
+
+      throw new Error(
+        "STUDENT/VISITOR ID ALREADY EXISTS"
+      );
+    }
+  }
+
+
+  /*
+    Create Person ID
+  */
+
+  const personId =
+    "P-" +
+    Utilities.getUuid()
+      .replace(/-/g, "")
+      .substring(0, 10)
+      .toUpperCase();
+
+
+  /*
+    Save to People
+  */
+
+  sheet.appendRow([
+    personId,
+    name,
+    type,
+    email,
+    studentVisitorId,
+    course,
+    year,
+    section,
+    "ACTIVE"
+  ]);
+
+
+  /*
+    Create today's QR automatically
+  */
+
+  const qr =
+    createDailyQR(personId);
+
+
+  /*
+    Audit
+  */
+
+  writeAudit_(
+    "PERSON_REGISTERED",
+    personId,
+    qr.qrId,
+    "Registered " + name
+  );
+
+
+  return {
+
+    success: true,
+
+    message:
+      "PERSON REGISTERED SUCCESSFULLY",
+
+    personId: personId,
+
+    name: name,
+
+    type: type,
+
+    qrId: qr.qrId,
+
+    token: qr.token,
+
+    date: qr.date
+  };
+}
+
+
+/* =====================================================
+   GET PEOPLE
+===================================================== */
+
+function getPeople() {
+
+  setupSheets_();
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        SHEETS.PEOPLE
+      );
+
+
+  const data =
+    sheet.getDataRange().getValues();
+
+
+  if (data.length <= 1) {
+    return [];
+  }
+
+
+  return data
+    .slice(1)
+    .filter(row => row[0])
+    .map(row => ({
+
+      personId: String(row[0] || ""),
+
+      name: String(row[1] || ""),
+
+      type: String(row[2] || ""),
+
+      email: String(row[3] || ""),
+
+      studentVisitorId:
+        String(row[4] || ""),
+
+      course: String(row[5] || ""),
+
+      year: String(row[6] || ""),
+
+      section: String(row[7] || ""),
+
+      status: String(row[8] || "")
+    }));
+}
+
+
+/* =====================================================
+   GET ACTIVE PEOPLE
+===================================================== */
+
+function getActivePeople() {
+
+  return getPeople()
+    .filter(
+      person =>
+        String(person.status)
+          .toUpperCase()
+        === "ACTIVE"
+    );
+}
+
+
+/* =====================================================
+   GET PERSON
+===================================================== */
+
+function getPerson(personId) {
+
+  if (!personId) {
+    return null;
+  }
+
+
+  const people =
+    getPeople();
+
+
+  return (
+    people.find(
+      person =>
+        String(person.personId)
+        === String(personId)
+    )
+    || null
+  );
+}
+
+
+/* =====================================================
+   CREATE DAILY QR
+===================================================== */
+
+function createDailyQR(personId) {
+
+  setupSheets_();
+
+
+  const person =
+    getPerson(personId);
+
+
+  if (!person) {
+
+    throw new Error(
+      "PERSON NOT FOUND"
+    );
+  }
+
+
+  if (
+    String(person.status)
+      .toUpperCase()
+    !== "ACTIVE"
+  ) {
+
+    throw new Error(
+      "PERSON ACCOUNT IS NOT ACTIVE"
+    );
+  }
+
+
+  const today =
+    getTodayString_();
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        SHEETS.QR
+      );
+
+
+  const data =
+    sheet.getDataRange().getValues();
+
+
+  /*
+    Reuse today's active QR
+  */
+
+  for (
+    let i = 1;
+    i < data.length;
+    i++
+  ) {
+
+    const rowPersonId =
+      String(data[i][1] || "")
+        .trim();
+
+
+    const rowDate =
+      normalizeDateValue_(
+        data[i][2]
+      );
+
+
+    const status =
+      String(data[i][4] || "")
+        .trim()
+        .toUpperCase();
+
+
+    if (
+      rowPersonId === String(personId)
+      &&
+      rowDate === today
+      &&
+      status === "ACTIVE"
+    ) {
+
+      return {
+
+        qrId:
+          String(data[i][0]),
+
+        personId:
+          String(personId),
+
+        token:
+          String(data[i][3]),
+
+        date:
+          today
+      };
+    }
+  }
+
+
+  /*
+    Create new QR
+  */
+
+  const qrId =
+    "QR-" +
+    Utilities.getUuid()
+      .replace(/-/g, "")
+      .substring(0, 12)
+      .toUpperCase();
+
+
+  const token =
+    "PLMUN-" +
+    Utilities.getUuid()
+      .replace(/-/g, "")
+      .substring(0, 20)
+      .toUpperCase();
+
+
+  sheet.appendRow([
+    qrId,
+    personId,
+    today,
+    token,
+    "ACTIVE"
+  ]);
+
+
+  return {
+
+    qrId: qrId,
+
+    personId: personId,
+
+    token: token,
+
+    date: today
+  };
+}
+
+
+/* =====================================================
+   GENERATE TODAY'S QR
+===================================================== */
+
+function generateTodaysQR(personId) {
+
+  return createDailyQR(personId);
+}
+
+
+/* =====================================================
+   SCAN QR
+===================================================== */
+
+function scanQR(qrValue) {
+
+  setupSheets_();
+
+
+  qrValue =
+    String(qrValue || "").trim();
+
+
+  if (!qrValue) {
+
+    return {
+
+      success: false,
+
+      action: "FAILED",
+
+      message: "INVALID QR CODE"
+    };
+  }
+
+
+  /*
+    Lock prevents two scans at exactly
+    the same time from creating duplicates.
+  */
+
+  const lock =
+    LockService.getScriptLock();
+
+
+  try {
+
+    lock.waitLock(10000);
+
+  } catch (error) {
+
+    return {
+
+      success: false,
+
+      action: "FAILED",
+
+      message:
+        "SYSTEM BUSY — PLEASE TRY AGAIN"
+    };
+  }
+
+
+  try {
+
+    /*
+      Find QR
+    */
+
+    const qr =
+      findQR_(qrValue);
+
+
+    if (!qr) {
+
+      return {
+
+        success: false,
+
+        action: "FAILED",
+
+        message: "INVALID QR CODE"
+      };
+    }
+
+
+    /*
+      QR must be active
+    */
+
+    if (
+      String(qr.status)
+        .toUpperCase()
+      !== "ACTIVE"
+    ) {
+
+      return {
+
+        success: false,
+
+        action: "FAILED",
+
+        message: "INVALID QR CODE"
+      };
+    }
+
+
+    /*
+      QR must be for today
+    */
+
+    const today =
+      getTodayString_();
+
+
+    if (
+      String(qr.date)
+      !== String(today)
+    ) {
+
+      return {
+
+        success: false,
+
+        action: "FAILED",
+
+        message: "EXPIRED QR CODE"
+      };
+    }
+
+
+    /*
+      Find person
+    */
+
+    const person =
+      getPerson(qr.personId);
+
+
+    if (!person) {
+
+      return {
+
+        success: false,
+
+        action: "FAILED",
+
+        message: "PERSON NOT FOUND"
+      };
+    }
+
+
+    /*
+      Person must be active
+    */
+
+    if (
+      String(person.status)
+        .toUpperCase()
+      !== "ACTIVE"
+    ) {
+
+      return {
+
+        success: false,
+
+        action: "FAILED",
+
+        message: "ACCOUNT IS NOT ACTIVE"
+      };
+    }
+
+
+    /*
+      Find TODAY'S attendance
+    */
+
+    const attendance =
+      findTodayAttendance_(
+        qr.personId
+      );
+
+
+    /*
+      ==================================================
+      IMPORTANT FIX
+      ==================================================
+
+      If today's attendance already has CHECK-OUT,
+      do NOT create another row.
+    */
+
+    if (
+      attendance &&
+      attendance.checkOut
+    ) {
+
+      return {
+
+        success: false,
+
+        action: "FAILED",
+
+        message:
+          "ATTENDANCE ALREADY COMPLETED FOR TODAY",
+
+        name:
+          person.name,
+
+        personId:
+          person.personId,
+
+        qrId:
+          qr.qrId
+      };
+    }
+
+
+    /*
+      ==================================================
+      SECOND SCAN
+      ==================================================
+
+      Existing CHECK IN row:
+      UPDATE SAME ROW with CHECK OUT.
+    */
+
+    if (
+      attendance &&
+      attendance.rowNumber
+    ) {
+
+      /*
+        Prevent extremely fast duplicate scan
+      */
+
+      const seconds =
+        secondsSince(
+          attendance.rawTime
+        );
+
+
+      if (
+        seconds >= 0 &&
+        seconds < 10
+      ) {
+
+        return {
+
+          success: false,
+
+          action: "FAILED",
+
+          message:
+            "DUPLICATE SCAN — PLEASE WAIT",
+
+          name:
+            person.name
+        };
+      }
+
+
+      const sheet =
+        SpreadsheetApp
+          .getActiveSpreadsheet()
+          .getSheetByName(
+            SHEETS.ATTENDANCE
+          );
+
+
+      /*
+        Current date/time
+      */
+
+      const now =
+        new Date();
+
+
+      /*
+        Column J = Check-Out
+        Column K = Status
+      */
+
+      sheet
+        .getRange(
+          attendance.rowNumber,
+          10
+        )
+        .setValue(now);
+
+
+      sheet
+        .getRange(
+          attendance.rowNumber,
+          11
+        )
+        .setValue("COMPLETED");
+
+
+      /*
+        Keep row's Time column
+        unchanged.
+      */
+
+
+      writeAudit_(
+        "CHECK_OUT",
+        person.personId,
+        qr.qrId,
+        "CHECK OUT - " + person.name
+      );
+
+
+      return {
+
+        success: true,
+
+        action: "CHECK OUT",
+
+        message:
+          person.name +
+          " - CHECK OUT SUCCESSFUL",
+
+        name:
+          person.name,
+
+        personId:
+          person.personId,
+
+        qrId:
+          qr.qrId,
+
+        type:
+          person.type,
+
+        email:
+          person.email,
+
+        status:
+          "COMPLETED"
+      };
+    }
+
+
+    /*
+      ==================================================
+      FIRST SCAN
+      ==================================================
+
+      Create ONE new row with CHECK IN.
+    */
+
+    const attendanceSheet =
+      SpreadsheetApp
+        .getActiveSpreadsheet()
+        .getSheetByName(
+          SHEETS.ATTENDANCE
+        );
+
+
+    const now =
+      new Date();
+
+
+    const scanId =
+      createScanId_();
+
+
+    const scannerAccount =
+      getScannerAccount_();
+
+
+    /*
+      Column layout:
+
+      A Scan ID
+      B Date
+      C Time
+      D QR ID
+      E Person ID
+      F Name
+      G Type
+      H Email
+      I Check-In
+      J Check-Out
+      K Status
+      L Scanner Account
+    */
+
+    attendanceSheet.appendRow([
+
+      scanId,
+
+      today,
+
+      now,
+
+      qr.qrId,
+
+      person.personId,
+
+      person.name,
+
+      person.type,
+
+      person.email,
+
+      now,
+
+      "",
+
+      "CHECKED IN",
+
+      scannerAccount
+
+    ]);
+
+
+    writeAudit_(
+      "CHECK_IN",
+      person.personId,
+      qr.qrId,
+      "CHECK IN - " + person.name
+    );
+
+
+    return {
+
+      success: true,
+
+      action: "CHECK IN",
+
+      message:
+        person.name +
+        " - CHECK IN SUCCESSFUL",
+
+      name:
+        person.name,
+
+      personId:
+        person.personId,
+
+      qrId:
+        qr.qrId,
+
+      type:
+        person.type,
+
+      email:
+        person.email,
+
+      status:
+        "CHECKED IN"
+    };
+
+
+  } finally {
+
+    try {
+
+      lock.releaseLock();
+
+    } catch (e) {}
+  }
+}
+
+
+/* =====================================================
+   FIND QR
+===================================================== */
+
+function findQR_(qrValue) {
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        SHEETS.QR
+      );
+
+
+  if (!sheet) {
+    return null;
+  }
+
+
+  const data =
+    sheet.getDataRange().getValues();
+
+
+  for (
+    let i = 1;
+    i < data.length;
+    i++
+  ) {
+
+    const qrId =
+      String(data[i][0] || "")
+        .trim();
+
+
+    const personId =
+      String(data[i][1] || "")
+        .trim();
+
+
+    const date =
+      normalizeDateValue_(
+        data[i][2]
+      );
+
+
+    const token =
+      String(data[i][3] || "")
+        .trim();
+
+
+    const status =
+      String(data[i][4] || "")
+        .trim()
+        .toUpperCase();
+
+
+    if (
+      String(qrValue).trim()
+      === qrId
+      ||
+      String(qrValue).trim()
+      === token
+    ) {
+
+      return {
+
+        rowNumber: i + 1,
+
+        qrId: qrId,
+
+        personId: personId,
+
+        date: date,
+
+        token: token,
+
+        status: status
+      };
+    }
+  }
+
+
+  return null;
+}
+
+
+/* =====================================================
+   FIND TODAY'S ATTENDANCE
+===================================================== */
+
+function findTodayAttendance_(personId) {
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        SHEETS.ATTENDANCE
+      );
+
+
+  if (!sheet) {
+    return null;
+  }
+
+
+  const data =
+    sheet.getDataRange().getValues();
+
+
+  const today =
+    getTodayString_();
+
+
+  let openAttendance = null;
+
+  let completedAttendance = null;
+
+
+  /*
+    Search from newest to oldest.
+    This helps when old test rows exist.
+  */
+
+  for (
+    let i = data.length - 1;
+    i >= 1;
+    i--
+  ) {
+
+    const row =
+      data[i];
+
+
+    const rowPersonId =
+      String(row[4] || "")
+        .trim();
+
+
+    if (
+      rowPersonId
+      !== String(personId).trim()
+    ) {
+
+      continue;
+    }
+
+
+    const rowDate =
+      normalizeDateValue_(
+        row[1]
+      );
+
+
+    if (
+      rowDate !== today
+    ) {
+
+      continue;
+    }
+
+
+    const checkIn =
+      row[8];
+
+
+    const checkOut =
+      row[9];
+
+
+    const status =
+      String(row[10] || "")
+        .trim()
+        .toUpperCase();
+
+
+    /*
+      Completed attendance
+    */
+
+    if (
+      checkOut
+      ||
+      status === "COMPLETED"
+    ) {
+
+      completedAttendance = {
+
+        rowNumber: i + 1,
+
+        scanId:
+          String(row[0] || ""),
+
+        date:
+          rowDate,
+
+        rawTime:
+          checkIn || row[2],
+
+        checkIn:
+          checkIn,
+
+        checkOut:
+          checkOut,
+
+        status:
+          status
+      };
+
+
+      break;
+    }
+
+
+    /*
+      Open CHECK IN
+    */
+
+    if (
+      checkIn
+      &&
+      !checkOut
+    ) {
+
+      openAttendance = {
+
+        rowNumber: i + 1,
+
+        scanId:
+          String(row[0] || ""),
+
+        date:
+          rowDate,
+
+        rawTime:
+          checkIn || row[2],
+
+        checkIn:
+          checkIn,
+
+        checkOut:
+          checkOut,
+
+        status:
+          status
+      };
+
+
+      /*
+        Do not break immediately.
+        We still want to see if a completed
+        row exists.
+      */
+    }
+  }
+
+
+  /*
+    Completed takes priority.
+  */
+
+  if (completedAttendance) {
+
+    return completedAttendance;
+  }
+
+
+  return openAttendance;
+}
+
+
+/* =====================================================
+   GET TODAY'S ATTENDANCE
+===================================================== */
+
+function getTodayAttendance() {
+
+  setupSheets_();
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        SHEETS.ATTENDANCE
+      );
+
+
+  const data =
+    sheet.getDataRange().getValues();
+
+
+  const today =
+    getTodayString_();
+
+
+  if (data.length <= 1) {
+    return [];
+  }
+
+
+  return data
+    .slice(1)
+    .filter(row => {
+
+      return (
+        normalizeDateValue_(row[1])
+        === today
+      );
+
+    })
+    .map(row => ({
+
+      scanId:
+        String(row[0] || ""),
+
+      date:
+        normalizeDateValue_(row[1]),
+
+      time:
+        formatTime_(row[2]),
+
+      qrId:
+        String(row[3] || ""),
+
+      personId:
+        String(row[4] || ""),
+
+      name:
+        String(row[5] || ""),
+
+      type:
+        String(row[6] || ""),
+
+      email:
+        String(row[7] || ""),
+
+      checkIn:
+        formatTime_(row[8]),
+
+      checkOut:
+        formatTime_(row[9]),
+
+      status:
+        String(row[10] || ""),
+
+      scannerAccount:
+        String(row[11] || "")
+    }));
+}
+
+
+/* =====================================================
+   GET DASHBOARD SUMMARY
+===================================================== */
+
+function getDashboardSummary() {
+
+  const people =
+    getPeople();
+
+
+  const attendance =
+    getTodayAttendance();
+
+
+  let checkedIn = 0;
+
+  let completed = 0;
+
+
+  attendance.forEach(row => {
+
+    if (
+      String(row.status)
+        .toUpperCase()
+      === "CHECKED IN"
+    ) {
+
+      checkedIn++;
+
+    }
+
+
+    if (
+      String(row.status)
+        .toUpperCase()
+      === "COMPLETED"
+    ) {
+
+      completed++;
+
+    }
+  });
+
+
+  return {
+
+    totalPeople:
+      people.length,
+
+    activePeople:
+      people.filter(
+        p =>
+          String(p.status)
+            .toUpperCase()
+          === "ACTIVE"
+      ).length,
+
+    todayAttendance:
+      attendance.length,
+
+    checkedIn:
+      checkedIn,
+
+    completed:
+      completed
+  };
+}
+
+
+/* =====================================================
+   SEARCH ATTENDANCE
+===================================================== */
+
+function searchAttendance(searchText) {
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        SHEETS.ATTENDANCE
+      );
+
+
+  if (!sheet) {
+    return [];
+  }
+
+
+  const data =
+    sheet.getDataRange().getValues();
+
+
+  const search =
+    String(searchText || "")
+      .trim()
+      .toLowerCase();
+
+
+  if (!search) {
+
+    return getTodayAttendance();
+
+  }
+
+
+  return data
+    .slice(1)
+    .filter(row => {
+
+      const values = [
+        row[0],
+        row[1],
+        row[2],
+        row[3],
+        row[4],
+        row[5],
+        row[6],
+        row[7],
+        row[10]
+      ];
+
+
+      return values.some(value =>
+
+        String(value || "")
+          .toLowerCase()
+          .includes(search)
+
+      );
+    })
+    .map(row => ({
+
+      scanId:
+        String(row[0] || ""),
+
+      date:
+        normalizeDateValue_(row[1]),
+
+      time:
+        formatTime_(row[2]),
+
+      qrId:
+        String(row[3] || ""),
+
+      personId:
+        String(row[4] || ""),
+
+      name:
+        String(row[5] || ""),
+
+      type:
+        String(row[6] || ""),
+
+      email:
+        String(row[7] || ""),
+
+      checkIn:
+        formatTime_(row[8]),
+
+      checkOut:
+        formatTime_(row[9]),
+
+      status:
+        String(row[10] || ""),
+
+      scannerAccount:
+        String(row[11] || "")
+    }));
+}
+
+
+/* =====================================================
+   AUDIT
+===================================================== */
+
+function writeAudit_(
+  action,
+  personId,
+  qrId,
+  details
+) {
+
+  try {
+
+    const sheet =
+      SpreadsheetApp
+        .getActiveSpreadsheet()
+        .getSheetByName(
+          SHEETS.AUDIT
+        );
+
+
+    if (!sheet) {
+      return;
+    }
+
+
+    const now =
+      new Date();
+
+
+    const auditId =
+      "AUD-" +
+      Utilities.getUuid()
+        .replace(/-/g, "")
+        .substring(0, 12)
+        .toUpperCase();
+
+
+    sheet.appendRow([
+
+      auditId,
+
+      getTodayString_(),
+
+      now,
+
+      action,
+
+      personId || "",
+
+      qrId || "",
+
+      details || "",
+
+      getScannerAccount_()
+
+    ]);
+
+  } catch (error) {
+
+    console.log(
+      "Audit error:",
+      error
+    );
+  }
+}
+
+
+/* =====================================================
+   SCANNER ACCOUNT
+===================================================== */
+
+function getScannerAccount_() {
+
+  try {
+
+    const email =
+      Session
+        .getActiveUser()
+        .getEmail();
+
+
+    if (email) {
+
+      return email;
+
+    }
+
+  } catch (error) {}
+
+
+  return "Scanner";
+}
+
+
+/* =====================================================
+   CREATE SCAN ID
+===================================================== */
+
+function createScanId_() {
+
+  return (
+    "SCAN-" +
+    Utilities.getUuid()
+      .replace(/-/g, "")
+      .substring(0, 12)
+      .toUpperCase()
+  );
+}
+
+
+/* =====================================================
+   TODAY STRING
+===================================================== */
+
+function getTodayString_() {
+
+  const timezone =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSpreadsheetTimeZone()
+      ||
+      Session.getScriptTimeZone()
+      ||
+      "Asia/Manila";
+
+
+  return Utilities.formatDate(
+    new Date(),
+    timezone,
+    "yyyy-MM-dd"
+  );
+}
+
+
+/* =====================================================
+   NORMALIZE DATE
+===================================================== */
+
+function normalizeDateValue_(value) {
+
+  if (!value) {
+    return "";
+  }
+
+
+  const timezone =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSpreadsheetTimeZone()
+      ||
+      Session.getScriptTimeZone()
+      ||
+      "Asia/Manila";
+
+
+  /*
+    Date object
+  */
+
+  if (
+    Object.prototype.toString
+      .call(value)
+    === "[object Date]"
+  ) {
+
+    if (isNaN(value.getTime())) {
+      return "";
+    }
+
+
+    return Utilities.formatDate(
+      value,
+      timezone,
+      "yyyy-MM-dd"
+    );
+  }
+
+
+  /*
+    String
+  */
+
+  const text =
+    String(value).trim();
+
+
+  /*
+    Already yyyy-MM-dd
+  */
+
+  if (
+    /^\d{4}-\d{2}-\d{2}$/
+      .test(text)
+  ) {
+
+    return text;
+  }
+
+
+  /*
+    Try parse
+  */
+
+  const parsed =
+    new Date(text);
+
+
+  if (!isNaN(parsed.getTime())) {
+
+    return Utilities.formatDate(
+      parsed,
+      timezone,
+      "yyyy-MM-dd"
+    );
+  }
+
+
+  return text;
+}
+
+
+/* =====================================================
+   FORMAT TIME
+===================================================== */
+
+function formatTime_(value) {
+
+  if (!value) {
+    return "";
+  }
+
+
+  const timezone =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSpreadsheetTimeZone()
+      ||
+      Session.getScriptTimeZone()
+      ||
+      "Asia/Manila";
+
+
+  if (
+    Object.prototype.toString
+      .call(value)
+    === "[object Date]"
+  ) {
+
+    if (isNaN(value.getTime())) {
+      return "";
+    }
+
+
+    return Utilities.formatDate(
+      value,
+      timezone,
+      "HH:mm:ss"
+    );
+  }
+
+
+  return String(value);
+}
+
+
+/* =====================================================
+   SECONDS SINCE
+===================================================== */
+
+function secondsSince(value) {
+
+  if (!value) {
+    return -1;
+  }
+
+
+  let dateValue;
+
+
+  if (
+    Object.prototype.toString
+      .call(value)
+    === "[object Date]"
+  ) {
+
+    dateValue = value;
+
+  } else {
+
+    dateValue = new Date(value);
+
+  }
+
+
+  if (isNaN(dateValue.getTime())) {
+    return -1;
+  }
+
+
+  return (
+    new Date().getTime()
+    -
+    dateValue.getTime()
+  ) / 1000;
+}
+
+
+/* =====================================================
+   DEACTIVATE PERSON
+===================================================== */
+
+function deactivatePerson(personId) {
+
+  setupSheets_();
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        SHEETS.PEOPLE
+      );
+
+
+  const data =
+    sheet.getDataRange().getValues();
+
+
+  for (
+    let i = 1;
+    i < data.length;
+    i++
+  ) {
+
+    if (
+      String(data[i][0])
+      === String(personId)
+    ) {
+
+      sheet
+        .getRange(i + 1, 9)
+        .setValue("INACTIVE");
+
+
+      writeAudit_(
+        "PERSON_DEACTIVATED",
+        personId,
+        "",
+        "Person deactivated"
+      );
+
+
+      return {
+
+        success: true,
+
+        message:
+          "PERSON DEACTIVATED"
+      };
+    }
+  }
+
+
+  return {
+
+    success: false,
+
+    message:
+      "PERSON NOT FOUND"
+  };
+}
+
+
+/* =====================================================
+   ACTIVATE PERSON
+===================================================== */
+
+function activatePerson(personId) {
+
+  setupSheets_();
+
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName(
+        SHEETS.PEOPLE
+      );
+
+
+  const data =
+    sheet.getDataRange().getValues();
+
+
+  for (
+    let i = 1;
+    i < data.length;
+    i++
+  ) {
+
+    if (
+      String(data[i][0])
+      === String(personId)
+    ) {
+
+      sheet
+        .getRange(i + 1, 9)
+        .setValue("ACTIVE");
+
+
+      writeAudit_(
+        "PERSON_ACTIVATED",
+        personId,
+        "",
+        "Person activated"
+      );
+
+
+      return {
+
+        success: true,
+
+        message:
+          "PERSON ACTIVATED"
+      };
+    }
+  }
+
+
+  return {
+
+    success: false,
+
+    message:
+      "PERSON NOT FOUND"
+  };
+}
+
+
+/* =====================================================
+   TEST PLMUNTRACK
+===================================================== */
+
+function testPLMunTrack() {
+
+  setupSheets_();
+
+
+  const result = {
+
+    success: true,
+
+    message:
+      "PLMunTrack setup is working.",
+
+    today:
+      getTodayString_(),
+
+    sheets: [
+
+      SHEETS.PEOPLE,
+
+      SHEETS.QR,
+
+      SHEETS.ATTENDANCE,
+
+      SHEETS.ADMINS,
+
+      SHEETS.AUDIT
+
+    ]
+  };
+
+
+  Logger.log(result);
+
+
+  return result;
+}
+
+
+/* =====================================================
+   TEST API
+===================================================== */
+
+function testAPI() {
+
+  const result =
+    scanQR("TEST");
+
+
+  Logger.log(result);
+
+
+  return result;
+}  
