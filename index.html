@@ -43,6 +43,7 @@
     .header p {
       margin: 6px 0 0;
       font-size: 14px;
+      opacity: 0.95;
     }
 
     .container {
@@ -263,7 +264,7 @@
 <script>
 
   /* =====================================================
-     PLMUNTRACK APPS SCRIPT
+     APPS SCRIPT URL
   ===================================================== */
 
   const APPS_SCRIPT_URL =
@@ -271,21 +272,24 @@
 
 
   /* =====================================================
-     SCANNER VARIABLES
+     VARIABLES
   ===================================================== */
 
   let html5QrCode = null;
+
   let scannerRunning = false;
+
   let processingScan = false;
 
   let lastScannedValue = "";
+
   let lastScanTime = 0;
 
   let requestTimeout = null;
 
 
   /* =====================================================
-     START SCANNER
+     START CAMERA
   ===================================================== */
 
   async function startScanner() {
@@ -298,22 +302,32 @@
 
     setStatus("Opening camera...");
 
-    html5QrCode = new Html5Qrcode("reader");
+    html5QrCode =
+      new Html5Qrcode("reader");
+
 
     const config = {
 
       fps: 10,
 
-      qrbox: function(width, height) {
+      qrbox: function(
+        viewfinderWidth,
+        viewfinderHeight
+      ) {
 
-        const size = Math.floor(
-          Math.min(width, height) * 0.70
-        );
+        const size =
+          Math.floor(
+            Math.min(
+              viewfinderWidth,
+              viewfinderHeight
+            ) * 0.70
+          );
 
         return {
           width: size,
           height: size
         };
+
       },
 
       aspectRatio: 1.0,
@@ -327,12 +341,16 @@
 
     try {
 
+      /*
+        IMPORTANT:
+        This is the camera setting that
+        previously worked on the iPhone.
+      */
+
       await html5QrCode.start(
 
         {
-          facingMode: {
-            ideal: "environment"
-          }
+          facingMode: "environment"
         },
 
         config,
@@ -346,9 +364,16 @@
 
       scannerRunning = true;
 
-      document.getElementById("startButton").style.display = "none";
 
-      document.getElementById("stopButton").style.display = "block";
+      document.getElementById(
+        "startButton"
+      ).style.display = "none";
+
+
+      document.getElementById(
+        "stopButton"
+      ).style.display = "block";
+
 
       setStatus(
         "Camera active — scan the QR code."
@@ -362,24 +387,31 @@
         error
       );
 
+
       scannerRunning = false;
+
 
       setStatus(
         "Camera could not be opened."
       );
+
 
       showError(
         "CAMERA ERROR",
         "Please allow camera permission and try again."
       );
 
+
       try {
 
         if (html5QrCode) {
+
           await html5QrCode.clear();
+
         }
 
       } catch (e) {}
+
 
       html5QrCode = null;
 
@@ -389,17 +421,22 @@
 
 
   /* =====================================================
-     QR DETECTED
+     QR SCAN SUCCESS
   ===================================================== */
 
-  async function onScanSuccess(decodedText) {
+  async function onScanSuccess(
+    decodedText,
+    decodedResult
+  ) {
 
     if (!decodedText) {
       return;
     }
 
+
     const qrValue =
       String(decodedText).trim();
+
 
     if (!qrValue) {
       return;
@@ -410,20 +447,27 @@
       Date.now();
 
 
-    /* Prevent duplicate detection */
+    /*
+      Prevent multiple scans while
+      current scan is processing.
+    */
 
-    if (
-      processingScan
-    ) {
+    if (processingScan) {
       return;
     }
 
+
+    /*
+      Prevent same QR from firing repeatedly.
+    */
 
     if (
       qrValue === lastScannedValue &&
       now - lastScanTime < 5000
     ) {
+
       return;
+
     }
 
 
@@ -444,11 +488,13 @@
       "QR detected. Processing..."
     );
 
+
     showLoading(true);
 
 
     /*
-      Stop camera first.
+      Stop camera before sending
+      attendance request.
     */
 
     await stopScanner(false);
@@ -458,17 +504,21 @@
       Send QR to Apps Script.
     */
 
-    sendQRToAppsScript(qrValue);
+    sendQRToAppsScript(
+      qrValue
+    );
 
   }
 
 
   /* =====================================================
-     SEND QR TO GOOGLE APPS SCRIPT
-     JSONP METHOD
+     SEND QR TO APPS SCRIPT
+     USING JSONP
   ===================================================== */
 
-  function sendQRToAppsScript(qrValue) {
+  function sendQRToAppsScript(
+    qrValue
+  ) {
 
     const callbackName =
       "plmunTrackCallback_" +
@@ -480,11 +530,13 @@
 
 
     const script =
-      document.createElement("script");
+      document.createElement(
+        "script"
+      );
 
 
     /*
-      Create global callback.
+      Global JSONP callback.
     */
 
     window[callbackName] =
@@ -497,7 +549,7 @@
 
 
         /*
-          Cancel timeout immediately.
+          Stop timeout immediately.
         */
 
         if (requestTimeout) {
@@ -512,7 +564,7 @@
 
 
         /*
-          Process result.
+          Process response.
         */
 
         try {
@@ -524,42 +576,49 @@
         } catch (error) {
 
           console.error(
-            "Response handling error:",
+            "Response error:",
             error
           );
 
+
           showLoading(false);
+
+          processingScan = false;
+
 
           showError(
             "SYSTEM ERROR",
             "The attendance response could not be processed."
           );
 
-          setStatus(
-            "Response received, but could not be processed."
-          );
 
-          processingScan = false;
+          setStatus(
+            "Response received but could not be processed."
+          );
 
         }
 
 
         /*
-          Cleanup callback.
+          Remove callback.
         */
 
         try {
 
-          delete window[callbackName];
+          delete window[
+            callbackName
+          ];
 
         } catch (e) {}
 
 
         /*
-          Remove script element.
+          Remove script.
         */
 
-        if (script.parentNode) {
+        if (
+          script.parentNode
+        ) {
 
           script.parentNode.removeChild(
             script
@@ -571,7 +630,7 @@
 
 
     /*
-      Encode QR value.
+      Encode QR.
     */
 
     const encodedQR =
@@ -581,7 +640,7 @@
 
 
     /*
-      Build Apps Script URL.
+      Create request URL.
     */
 
     const url =
@@ -596,13 +655,13 @@
 
 
     console.log(
-      "Sending request:",
+      "Apps Script request:",
       url
     );
 
 
     /*
-      Handle network/script error.
+      Network error.
     */
 
     script.onerror =
@@ -626,12 +685,16 @@
 
         try {
 
-          delete window[callbackName];
+          delete window[
+            callbackName
+          ];
 
         } catch (e) {}
 
 
-        if (script.parentNode) {
+        if (
+          script.parentNode
+        ) {
 
           script.parentNode.removeChild(
             script
@@ -642,27 +705,34 @@
 
         showLoading(false);
 
+        processingScan = false;
+
+
         showError(
           "CONNECTION ERROR",
           "PLMunTrack could not be reached."
         );
 
+
         setStatus(
           "Connection failed."
         );
-
-        processingScan = false;
 
       };
 
 
     /*
-      Add script to page.
-      */
+      Set source.
+    */
 
     script.src = url;
 
     script.async = true;
+
+
+    /*
+      Add request to page.
+    */
 
     document.body.appendChild(
       script
@@ -670,7 +740,7 @@
 
 
     /*
-      Timeout.
+      20 second timeout.
     */
 
     requestTimeout =
@@ -678,30 +748,36 @@
         function() {
 
           /*
-            If callback already executed,
+            If callback already ran,
             do nothing.
           */
 
           if (
             !window[callbackName]
           ) {
+
             return;
+
           }
 
 
           console.error(
-            "Apps Script request timeout."
+            "Request timeout."
           );
 
 
           try {
 
-            delete window[callbackName];
+            delete window[
+              callbackName
+            ];
 
           } catch (e) {}
 
 
-          if (script.parentNode) {
+          if (
+            script.parentNode
+          ) {
 
             script.parentNode.removeChild(
               script
@@ -712,16 +788,18 @@
 
           showLoading(false);
 
+          processingScan = false;
+
+
           showError(
             "REQUEST TIMEOUT",
             "PLMunTrack did not respond. Please try again."
           );
 
+
           setStatus(
             "Request timed out."
           );
-
-          processingScan = false;
 
 
         },
@@ -732,10 +810,12 @@
 
 
   /* =====================================================
-     HANDLE APPS SCRIPT RESULT
+     HANDLE RESULT
   ===================================================== */
 
-  function handleScanResult(result) {
+  function handleScanResult(
+    result
+  ) {
 
     showLoading(false);
 
@@ -749,23 +829,26 @@
         "No response was received from PLMunTrack."
       );
 
+
       setStatus(
         "No response."
       );
 
+
       return;
+
     }
 
 
     console.log(
-      "Result:",
+      "Attendance result:",
       result
     );
 
 
-    /* =========================
-       SUCCESS
-    ========================= */
+    /*
+      SUCCESS
+    */
 
     if (
       result.success === true
@@ -812,9 +895,9 @@
     }
 
 
-    /* =========================
-       FAILED
-    ========================= */
+    /*
+      FAILED
+    */
 
     const errorMessage =
       String(
@@ -919,13 +1002,24 @@
     }
 
 
+    if (
+      upper.includes(
+        "ALREADY COMPLETED"
+      )
+    ) {
+
+      return "ATTENDANCE COMPLETED";
+
+    }
+
+
     return "ATTENDANCE";
 
   }
 
 
   /* =====================================================
-     STOP SCANNER
+     STOP CAMERA
   ===================================================== */
 
   async function stopScanner(
@@ -933,9 +1027,7 @@
   ) {
 
     if (!html5QrCode) {
-
       return;
-
     }
 
 
@@ -978,12 +1070,14 @@
 
     document.getElementById(
       "startButton"
-    ).style.display = "block";
+    ).style.display =
+      "block";
 
 
     document.getElementById(
       "stopButton"
-    ).style.display = "none";
+    ).style.display =
+      "none";
 
 
     if (showReady) {
@@ -998,10 +1092,12 @@
 
 
   /* =====================================================
-     SCAN FAILURE
+     QR SCAN FAILURE
   ===================================================== */
 
-  function onScanFailure(error) {
+  function onScanFailure(
+    error
+  ) {
 
     /*
       Normal QR detection failures
@@ -1012,7 +1108,7 @@
 
 
   /* =====================================================
-     SUCCESS DISPLAY
+     SUCCESS RESULT
   ===================================================== */
 
   function showSuccess(
@@ -1055,7 +1151,7 @@
 
 
   /* =====================================================
-     ERROR DISPLAY
+     ERROR RESULT
   ===================================================== */
 
   function showError(
@@ -1145,7 +1241,7 @@
 
 
   /* =====================================================
-     HTML ESCAPE
+     ESCAPE HTML
   ===================================================== */
 
   function escapeHtml(
