@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+
+  <meta name="viewport"
+        content="width=device-width,
+                 initial-scale=1,
+                 maximum-scale=1,
+                 user-scalable=no">
+
+  <title>PLMunTrack</title>
+
+  <!-- QR Scanner -->
+  <script src="https://unpkg.com/html5-qrcode"
+          type="text/javascript"></script>
+
+  <!-- QR Generator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f4f6f8;
+      color: #222;
+    }
+
+    /* =========================
+       HEADER
+    ========================= */
+
+    .header {
+      background: #08752a;
+      color: white;
+      padding: 22px 20px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 27px;
+    }
+
+    .header p {
+      margin: 6px 0 0;
+      font-size: 14px;
+      opacity: .92;
+    }
+
+    /* =========================
+       NAVIGATION
+    ========================= */
+
+    .nav {
+      background: white;
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+      padding: 8px;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .nav button {
+      border: none;
+      background: transparent;
+      padding: 11px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      color: #555;
+    }
+
+    .nav button:hover,
+    .nav button.active {
+      background: #e8f5ec;
+      color: #08752a;
+    }
+
+    /* =========================
+       MAIN
+    ========================= */
+
+    .container {
+      width: 95%;
+      max-width: 1100px;
+      margin: 25px auto;
+    }
+
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 22px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.07);
+    }
+
+    .card h2 {
+      margin-top: 0;
+      color: #08752a;
+      font-size: 20px;
+    }
+
+    /* =========================
+       FORM
+    ========================= */
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 15px;
+      background: white;
+    }
+
+    input:focus,
+    select:focus {
+      outline: none;
+      border-color: #08752a;
+    }
+
+    /* =========================
+       BUTTONS
+    ========================= */
+
+    .btn {
+      border: none;
+      padding: 12px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    .btn-primary {
+      background: #08752a;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #075d22;
+    }
+
+    .btn-secondary {
+      background: #e9ecef;
+      color: #333;
+    }
+
+    .btn-danger {
+      background: #c62828;
+      color: white;
+    }
+
+    .btn:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    .actions {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* =========================
+       PEOPLE TABLE
+    ========================= */
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 700px;
+    }
+
+    th,
+    td {
+      padding: 11px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      background: #f1f4f2;
+      color: #08752a;
+    }
+
+    tr:hover td {
+      background: #fafafa;
+    }
+
+    /* =========================
+       DASHBOARD
+    ========================= */
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .stat {
+      background: white;
+      padding: 18px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+
+    .stat-title {
+      font-size: 12px;
+      color: #777;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: bold;
+      margin-top: 6px;
+      color: #08752a;
+    }
+
+    /* =========================
+       QR
+    ========================= */
+
+    .qr-area {
+      text-align: center;
+      padding: 20px;
+    }
+
+    #qrcode {
+      display: inline-block;
+      margin: 20px auto;
+    }
+
+    .qr-name {
+      font-size: 21px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .qr-info {
+      color: #666;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    /* =========================
+       SCANNER
+    ========================= */
+
+    #reader {
+      width: 100%;
+      max-width: 500px;
+      margin: 15px auto;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+
+    .scanner-status {
+      text-align: center;
+      font-size: 14px;
+      color: #666;
+      margin: 10px 0;
+    }
+
+    .scan-result {
+      display: none;
+      text-align: center;
+      padding: 25px;
+      border-radius: 12px;
+      margin-top: 20px;
+    }
+
+    .scan-result.success {
+      display: block;
+      background: #e8f5e9;
+      border: 1px solid #81c784;
+      color: #155724;
+    }
+
+    .scan-result.error {
+      display: block;
+      background: #ffebee;
+      border: 1px solid #ef9a9a;
+      color: #721c24;
+    }
+
+    .result-action {
+      font-size: 25px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .result-name {
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    /* =========================
+       MODAL
+    ========================= */
+
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.55);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal.show {
+      display: flex;
+    }
+
+    .modal-box {
+      width: 100%;
+      max-width: 500px;
+      background: white;
+      border-radius: 14px;
+      padding: 25px;
+      text-align: center;
+    }
+
+    /* =========================
+       LOADING
+    ========================= */
+
+    .loading {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,.75);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #08752a;
+    }
+
+    .loading.show {
+      display: flex;
+    }
+
+    /* =========================
+       MOBILE
+    ========================= */
+
+    @media (max-width: 750px) {
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .field.full {
+        grid-column: auto;
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .nav {
+        overflow-x: auto;
+        justify-content: flex-start;
+      }
+
+      .nav button {
+        white-space: nowrap;
+      }
+
+      .container {
+        width: 94%;
+      }
+
+      .header h1 {
+        font-size: 23px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ==================================================
+     HEADER
+================================================== -->
+
+<header class="header">
+  <h1>PLMunTrack</h1>
+  <p>QR Code-Based Attendance Management System</p>
+</header>
+
+
+<!-- ==================================================
+     NAVIGATION
+================================================== -->
+
+<nav class="nav">
+
+  <button
+    class="nav-btn active"
+    onclick="showSection('dashboard', this)">
+    Dashboard
+  </button>
+
+  <button
+    class="nav-btn"
+    onclick="showSection('registration', this)">
+    Registration
+  </button>
+
+  <button
+    class="nav-btn"
+    onclick="showSection('people', this)">
+    People
+  </button>
+
+  <button
+    class="nav-btn"
+    onclick="showSection('qr', this)">
+    QR Generator
+  </button>
+
+  <button
+    class="nav-btn"
+    onclick="showSection('scanner', this)">
+    Scanner
+  </button>
+
+  <button
+    class="nav-btn"
+    onclick="showSection('attendance', this)">
+    Attendance
+  </button>
+
+</nav>
+
+
+<main class="container">
+
+
+<!-- ==================================================
+     DASHBOARD
+================================================== -->
+
+<section id="dashboard" class="section active">
+
+  <div class="stats">
+
+    <div class="stat">
+      <div class="stat-title">
+        TOTAL PEOPLE
+      </div>
+
+      <div class="stat-value"
+           id="statTotal">
+        0
+      </div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-title">
+        STUDENTS
+      </div>
+
+      <div class="stat-value"
+           id="statStudents">
+        0
+      </div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-title">
+        VISITORS
+      </div>
+
+      <div class="stat-value"
+           id="statVisitors">
+        0
+      </div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-title">
+        CURRENTLY INSIDE
+      </div>
+
+      <div class="stat-value"
+           id="statInside">
+        0
+      </div>
+    </div>
+
+  </div>
+
+
+  <div class="card">
+
+    <h2>Today's Attendance</h2>
+
+    <div class="actions">
+
+      <button
+        class="btn btn-primary"
+        onclick="loadDashboard()">
+        Refresh Dashboard
+      </button>
+
+      <button
+        class="btn btn-secondary"
+        onclick="showSectionByName('scanner')">
+        Open Scanner
+      </button>
+
+    </div>
+
+  </div>
+
+</section>
+
+
+<!-- ==================================================
+     REGISTRATION
+================================================== -->
+
+<section id="registration" class="section">
+
+  <div class="card">
+
+    <h2>Register Student / Visitor</h2>
+
+    <form id="registrationForm">
+
+      <div class="grid">
+
+        <div class="field">
+
+          <label>Person Type</label>
+
+          <select id="type"
+                  required
+                  onchange="updateRegistrationFields()">
+
+            <option value="">
+              Select Type
+            </option>
+
+            <option value="STUDENT">
+              Student
+            </option>
+
+            <option value="VISITOR">
+              Visitor
+            </option>
+
+          </select>
+
+        </div>
+
+
+        <div class="field">
+
+          <label>
+            Student / Visitor ID
+          </label>
+
+          <input
+            type="text"
+            id="personNumber"
+            placeholder="Enter ID"
+            required>
+
+        </div>
+
+
+        <div class="field full">
+
+          <label>Full Name</label>
+
+          <input
+            type="text"
+            id="name"
+            placeholder="Full name"
+            required>
+
+        </div>
+
+
+        <div class="field">
+
+          <label>Email</label>
+
+          <input
+            type="email"
+            id="email"
+            placeholder="Email address">
+
+        </div>
+
+
+        <div class="field">
+
+          <label>Course</label>
+
+          <input
+            type="text"
+            id="course"
+            placeholder="e.g. BSIT">
+
+        </div>
+
+
+        <div class="field">
+
+          <label>Year</label>
+
+          <select id="year">
+
+            <option value="">
+              Select Year
+            </option>
+
+            <option value="1st Year">
+              1st Year
+            </option>
+
+            <option value="2nd Year">
+              2nd Year
+            </option>
+
+            <option value="3rd Year">
+              3rd Year
+            </option>
+
+            <option value="4th Year">
+              4th Year
+            </option>
+
+          </select>
+
+        </div>
+
+
+        <div class="field">
+
+          <label>Section</label>
+
+          <input
+            type="text"
+            id="section"
+            placeholder="Section">
+
+        </div>
+
+      </div>
+
+
+      <div class="actions">
+
+        <button
+          type="submit"
+          class="btn btn-primary"
+          id="registerBtn">
+
+          Register Person
+
+        </button>
+
+        <button
+          type="reset"
+          class="btn btn-secondary">
+
+          Clear
+
+        </button>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</section>
+
+
+<!-- ==================================================
+     PEOPLE
+================================================== -->
+
+<section id="people" class="section">
+
+  <div class="card">
+
+    <h2>People</h2>
+
+    <div class="actions">
+
+      <button
+        class="btn btn-primary"
+        onclick="loadPeople()">
+
+        Refresh People
+
+      </button>
+
+    </div>
+
+    <br>
+
+    <div class="table-wrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+            <th>Person ID</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>ID</th>
+            <th>Course</th>
+            <th>Year</th>
+            <th>Section</th>
+            <th>Status</th>
+          </tr>
+
+        </thead>
+
+        <tbody id="peopleTable">
+
+          <tr>
+            <td colspan="8">
+              Loading...
+            </td>
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+</section>
+
+
+<!-- ==================================================
+     QR GENERATOR
+================================================== -->
+
+<section id="qr" class="section">
+
+  <div class="card">
+
+    <h2>Generate Today's QR</h2>
+
+    <div class="field">
+
+      <label>Select a Person</label>
+
+      <select id="personSelect">
+
+        <option value="">
+          Select a person
+        </option>
+
+      </select>
+
+    </div>
+
+
+    <div class="actions">
+
+      <button
+        class="btn btn-primary"
+        onclick="generateQR()">
+
+        Generate Today's QR
+
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <div class="card qr-area"
+       id="qrResult"
+       style="display:none;">
+
+    <div class="qr-name"
+         id="qrName">
+    </div>
+
+    <div class="qr-info">
+
+      Today's QR Code
+
+      <br>
+
+      QR ID:
+      <strong id="qrId"></strong>
+
+      <br>
+
+      Valid Date:
+      <strong id="qrDate"></strong>
+
+    </div>
+
+
+    <div id="qrcode"></div>
+
+  </div>
+
+</section>
+
+
+<!-- ==================================================
+     SCANNER
+================================================== -->
+
+<section id="scanner" class="section">
+
+  <div class="card">
+
+    <h2>Scan Attendance QR</h2>
+
+    <div class="scanner-status"
+         id="scannerStatus">
+
+      Press START SCANNER to open the camera.
+
+    </div>
+
+
+    <div id="reader"></div>
+
+
+    <div class="actions"
+         style="justify-content:center;">
+
+      <button
+        class="btn btn-primary"
+        id="startScannerBtn"
+        onclick="startScanner()">
+
+        📷 START SCANNER
+
+      </button>
+
+
+      <button
+        class="btn btn-danger"
+        id="stopScannerBtn"
+        onclick="stopScanner()"
+        style="display:none;">
+
+        STOP SCANNER
+
+      </button>
+
+    </div>
+
+
+    <div
+      id="scanResult"
+      class="scan-result">
+
+      <div
+        class="result-action"
+        id="resultAction">
+      </div>
+
+      <div
+        class="result-name"
+        id="resultName">
+      </div>
+
+      <div
+        id="resultMessage">
+      </div>
+
+      <div
+        id="resultTime"
+        style="margin-top:8px;">
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
+
+
+<!-- ==================================================
+     ATTENDANCE
+================================================== -->
+
+<section id="attendance" class="section">
+
+  <div class="card">
+
+    <h2>Today's Attendance</h2>
+
+    <div class="actions">
+
+      <button
+        class="btn btn-primary"
+        onclick="loadAttendance()">
+
+        Refresh Attendance
+
+      </button>
+
+    </div>
+
+    <br>
+
+    <div class="table-wrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Date</th>
+            <th>Check-In</th>
+            <th>Check-Out</th>
+            <th>Status</th>
+          </tr>
+
+        </thead>
+
+        <tbody id="attendanceTable">
+
+          <tr>
+            <td colspan="6">
+              Loading...
+            </td>
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+</section>
+
+
+</main>
+
+
+<!-- ==================================================
+     REGISTRATION SUCCESS MODAL
+================================================== -->
+
+<div
+  class="modal"
+  id="registrationModal">
+
+  <div class="modal-box">
+
+    <h2
+      style="color:#08752a;">
+      Registration Successful
+    </h2>
+
+    <div
+      id="registrationMessage"
+      style="line-height:1.8;">
+    </div>
+
+    <div class="actions"
+         style="justify-content:center;">
+
+      <button
+        class="btn btn-primary"
+        onclick="closeModal(); openGeneratedQR();">
+
+        View QR
+
+      </button>
+
+      <button
+        class="btn btn-secondary"
+        onclick="closeModal();">
+
+        Close
+
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- ==================================================
+     LOADING
+================================================== -->
+
+<div
+  class="loading"
+  id="loading">
+
+  Please wait...
+
+</div>
+
+
+<script>
+
+/* =====================================================
+   GLOBAL VARIABLES
+===================================================== */
+
+let html5QrCode = null;
+let scannerRunning = false;
+
+let lastScanValue = "";
+let lastScanTime = 0;
+
+let generatedQRData = null;
+
+
+/* =====================================================
+   PAGE NAVIGATION
+===================================================== */
+
+function showSection(sectionId, button) {
+
+  document
+    .querySelectorAll(".section")
+    .forEach(section => {
+      section.classList.remove("active");
+    });
+
+  document
+    .getElementById(sectionId)
+    .classList.add("active");
+
+  document
+    .querySelectorAll(".nav-btn")
+    .forEach(btn => {
+      btn.classList.remove("active");
+    });
+
+  if (button) {
+    button.classList.add("active");
+  }
+
+  if (sectionId === "dashboard") {
+    loadDashboard();
+  }
+
+  if (sectionId === "people") {
+    loadPeople();
+  }
+
+  if (sectionId === "qr") {
+    loadPeopleForQR();
+  }
+
+  if (sectionId === "attendance") {
+    loadAttendance();
+  }
+}
+
+
+function showSectionByName(sectionId) {
+
+  const button =
+    Array.from(
+      document.querySelectorAll(".nav-btn")
+    ).find(btn =>
+      btn.textContent
+        .toLowerCase()
+        .includes(sectionId)
+    );
+
+  showSection(sectionId, button);
+}
+
+
+/* =====================================================
+   LOADING
+===================================================== */
+
+function showLoading(show) {
+
+  document
+    .getElementById("loading")
+    .classList.toggle(
+      "show",
+      show
+    );
+}
+
+
+/* =====================================================
+   REGISTRATION
+===================================================== */
+
+document
+  .getElementById("registrationForm")
+  .addEventListener(
+    "submit",
+    function(event) {
+
+      event.preventDefault();
+
+      const data = {
+
+        name:
+          document
+            .getElementById("name")
+            .value
+            .trim(),
+
+        type:
+          document
+            .getElementById("type")
+            .value,
+
+        email:
+          document
+            .getElementById("email")
+            .value
+            .trim(),
+
+        studentVisitorId:
+          document
+            .getElementById("personNumber")
+            .value
+            .trim(),
+
+        course:
+          document
+            .getElementById("course")
+            .value
+            .trim(),
+
+        year:
+          document
+            .getElementById("year")
+            .value,
+
+        section:
+          document
+            .getElementById("section")
+            .value
+            .trim()
+
+      };
+
+      if (!data.type) {
+
+        alert(
+          "Please select Student or Visitor."
+        );
+
+        return;
+      }
+
+      showLoading(true);
+
+      google.script.run
+
+        .withSuccessHandler(function(result) {
+
+          showLoading(false);
+
+          generatedQRData = result;
+
+          document
+            .getElementById(
+              "registrationMessage"
+            )
+            .innerHTML =
+
+              "<strong>" +
+              escapeHtml(result.name) +
+              "</strong><br>" +
+
+              "Type: " +
+              escapeHtml(result.type) +
+              "<br>" +
+
+              "Person ID: " +
+              escapeHtml(result.personId) +
+              "<br>" +
+
+              "QR ID: " +
+              escapeHtml(result.qrId) +
+              "<br>" +
+
+              "Valid Date: " +
+              escapeHtml(result.date);
+
+          document
+            .getElementById(
+              "registrationModal"
+            )
+            .classList.add("show");
+
+          document
+            .getElementById(
+              "registrationForm"
+            )
+            .reset();
+
+          loadDashboard();
+
+        })
+
+        .withFailureHandler(function(error) {
+
+          showLoading(false);
+
+          alert(
+            error.message ||
+            "Registration failed."
+          );
+
+        })
+
+        .registerPerson(data);
+    }
+  );
+
+
+/* =====================================================
+   PEOPLE
+===================================================== */
+
+function loadPeople() {
+
+  const table =
+    document.getElementById(
+      "peopleTable"
+    );
+
+  table.innerHTML =
+    `<tr>
+      <td colspan="8">
+        Loading...
+      </td>
+    </tr>`;
+
+  google.script.run
+
+    .withSuccessHandler(function(people) {
+
+      if (!people || people.length === 0) {
+
+        table.innerHTML =
+          `<tr>
+            <td colspan="8">
+              No people registered yet.
+            </td>
+          </tr>`;
+
+        return;
+      }
+
+      table.innerHTML =
+        people.map(person => `
+
+          <tr>
+
+            <td>
+              ${escapeHtml(person.personId)}
+            </td>
+
+            <td>
+              <strong>
+                ${escapeHtml(person.name)}
+              </strong>
+            </td>
+
+            <td>
+              ${escapeHtml(person.type)}
+            </td>
+
+            <td>
+              ${escapeHtml(person.studentVisitorId)}
+            </td>
+
+            <td>
+              ${escapeHtml(person.course)}
+            </td>
+
+            <td>
+              ${escapeHtml(person.year)}
+            </td>
+
+            <td>
+              ${escapeHtml(person.section)}
+            </td>
+
+            <td>
+              ${escapeHtml(person.status)}
+            </td>
+
+          </tr>
+
+        `).join("");
+
+    })
+
+    .withFailureHandler(function(error) {
+
+      table.innerHTML =
+        `<tr>
+          <td colspan="8">
+            ${escapeHtml(
+              error.message ||
+              "Failed to load people."
+            )}
+          </td>
+        </tr>`;
+
+    })
+
+    .getPeople();
+}
+
+
+/* =====================================================
+   PEOPLE → QR SELECT
+===================================================== */
+
+function loadPeopleForQR() {
+
+  const select =
+    document.getElementById(
+      "personSelect"
+    );
+
+  select.innerHTML =
+    `<option value="">
+      Loading people...
+    </option>`;
+
+  google.script.run
+
+    .withSuccessHandler(function(people) {
+
+      select.innerHTML =
+        `<option value="">
+          Select a person
+        </option>`;
+
+      people
+        .filter(person =>
+          String(person.status)
+            .toUpperCase() === "ACTIVE"
+        )
+        .forEach(person => {
+
+          const option =
+            document.createElement(
+              "option"
+            );
+
+          option.value =
+            person.personId;
+
+          option.textContent =
+            person.name +
+            " — " +
+            person.type;
+
+          select.appendChild(option);
+        });
+
+    })
+
+    .withFailureHandler(function(error) {
+
+      select.innerHTML =
+        `<option value="">
+          Failed to load people
+        </option>`;
+
+      alert(
+        error.message ||
+        "Failed to load people."
+      );
+
+    })
+
+    .getActivePeople();
+}
+
+
+/* =====================================================
+   GENERATE QR
+===================================================== */
+
+function generateQR() {
+
+  const personId =
+    document
+      .getElementById("personSelect")
+      .value;
+
+  if (!personId) {
+
+    alert(
+      "Please select a person."
+    );
+
+    return;
+  }
+
+  showLoading(true);
+
+  google.script.run
+
+    .withSuccessHandler(function(result) {
+
+      showLoading(false);
+
+      generatedQRData =
+        result;
+
+      displayQR(result);
+
+    })
+
+    .withFailureHandler(function(error) {
+
+      showLoading(false);
+
+      alert(
+        error.message ||
+        "QR generation failed."
+      );
+
+    })
+
+    .generateTodaysQR(personId);
+}
+
+
+function displayQR(result) {
+
+  const selectedOption =
+    document
+      .getElementById(
+        "personSelect"
+      )
+      .selectedOptions[0];
+
+  const name =
+    selectedOption
+      ? selectedOption.textContent
+      : result.personId;
+
+  document
+    .getElementById("qrResult")
+    .style.display = "block";
+
+  document
+    .getElementById("qrName")
+    .textContent = name;
+
+  document
+    .getElementById("qrId")
+    .textContent = result.qrId;
+
+  document
+    .getElementById("qrDate")
+    .textContent = result.date;
+
+  const qrContainer =
+    document.getElementById(
+      "qrcode"
+    );
+
+  qrContainer.innerHTML = "";
+
+  new QRCode(
+    qrContainer,
+    {
+      text: result.token,
+      width: 250,
+      height: 250,
+      correctLevel:
+        QRCode.CorrectLevel.H
+    }
+  );
+}
+
+
+/* =====================================================
+   OPEN GENERATED QR AFTER REGISTRATION
+===================================================== */
+
+function openGeneratedQR() {
+
+  if (!generatedQRData) {
+    return;
+  }
+
+  showSectionByName("qr");
+
+  setTimeout(function() {
+
+    displayQR(
+      generatedQRData
+    );
+
+  }, 200);
+}
+
+
+/* =====================================================
+   SCANNER
+===================================================== */
+
+function startScanner() {
+
+  if (scannerRunning) {
+    return;
+  }
+
+  const reader =
+    document.getElementById(
+      "reader"
+    );
+
+  reader.innerHTML = "";
+
+  html5QrCode =
+    new Html5Qrcode("reader");
+
+  document
+    .getElementById(
+      "scannerStatus"
+    )
+    .textContent =
+      "Opening camera...";
+
+  const config = {
+
+    fps: 10,
+
+    qrbox: function(
+      width,
+      height
+    ) {
+
+      const size =
+        Math.floor(
+          Math.min(
+            width,
+            height
+          ) * 0.70
+        );
+
+      return {
+        width: size,
+        height: size
+      };
+    },
+
+    aspectRatio: 1.0,
+
+    rememberLastUsedCamera: true
+
+  };
+
+
+  html5QrCode
+    .start(
+
+      {
+        facingMode: "environment"
+      },
+
+      config,
+
+      onScanSuccess,
+
+      onScanFailure
+
+    )
+
+    .then(function() {
+
+      scannerRunning = true;
+
+      document
+        .getElementById(
+          "scannerStatus"
+        )
+        .textContent =
+          "Camera ready. Point the camera at the QR code.";
+
+      document
+        .getElementById(
+          "startScannerBtn"
+        )
+        .style.display =
+          "none";
+
+      document
+        .getElementById(
+          "stopScannerBtn"
+        )
+        .style.display =
+          "inline-block";
+
+    })
+
+    .catch(function(error) {
+
+      console.error(error);
+
+      document
+        .getElementById(
+          "scannerStatus"
+        )
+        .textContent =
+          "Camera could not be opened.";
+
+      alert(
+        "Camera permission was denied or the camera could not be opened. " +
+        "Please allow camera access in your browser settings."
+      );
+
+    });
+}
+
+
+function onScanFailure(errorMessage) {
+  // Normal during scanning.
+}
+
+
+function onScanSuccess(decodedText) {
+
+  if (!decodedText) {
+    return;
+  }
+
+  /*
+   * Prevent html5-qrcode from
+   * sending the same QR many times.
+   */
+
+  const now =
+    Date.now();
+
+  if (
+    decodedText === lastScanValue &&
+    now - lastScanTime < 3000
+  ) {
+    return;
+  }
+
+  lastScanValue =
+    decodedText;
+
+  lastScanTime =
+    now;
+
+  showScanResult(
+    "PROCESSING",
+    "",
+    "Verifying QR code...",
+    "",
+    false
+  );
+
+  google.script.run
+
+    .withSuccessHandler(function(result) {
+
+      if (result.success) {
+
+        showScanResult(
+          result.action,
+          result.name,
+          result.message,
+          result.time,
+          true
+        );
+
+      } else {
+
+        showScanResult(
+          "SCAN FAILED",
+          "",
+          result.message,
+          "",
+          false
+        );
+      }
+
+      loadDashboard();
+
+      loadAttendance();
+
+    })
+
+    .withFailureHandler(function(error) {
+
+      showScanResult(
+        "SCAN FAILED",
+        "",
+        error.message ||
+        "Unable to process QR code.",
+        "",
+        false
+      );
+
+    })
+
+    .scanQR(decodedText);
+}
+
+
+/* =====================================================
+   SCAN RESULT
+===================================================== */
+
+function showScanResult(
+  action,
+  name,
+  message,
+  time,
+  success
+) {
+
+  const box =
+    document.getElementById(
+      "scanResult"
+    );
+
+  box.className =
+    "scan-result " +
+    (success
+      ? "success"
+      : "error");
+
+  document
+    .getElementById(
+      "resultAction"
+    )
+    .textContent =
+      action;
+
+  document
+    .getElementById(
+      "resultName"
+    )
+    .textContent =
+      name;
+
+  document
+    .getElementById(
+      "resultMessage"
+    )
+    .textContent =
+      message;
+
+  document
+    .getElementById(
+      "resultTime"
+    )
+    .textContent =
+      time
+        ? "Time: " + time
+        : "";
+
+  box.style.display =
+    "block";
+}
+
+
+/* =====================================================
+   STOP SCANNER
+===================================================== */
+
+function stopScanner() {
+
+  if (
+    !html5QrCode ||
+    !scannerRunning
+  ) {
+    return;
+  }
+
+  html5QrCode
+    .stop()
+    .then(function() {
+
+      scannerRunning = false;
+
+      document
+        .getElementById(
+          "scannerStatus"
+        )
+        .textContent =
+          "Scanner stopped.";
+
+      document
+        .getElementById(
+          "startScannerBtn"
+        )
+        .style.display =
+          "inline-block";
+
+      document
+        .getElementById(
+          "stopScannerBtn"
+        )
+        .style.display =
+          "none";
+
+    })
+    .catch(function(error) {
+
+      console.error(error);
+
+    });
+}
+
+
+/* =====================================================
+   ATTENDANCE
+===================================================== */
+
+function loadAttendance() {
+
+  const table =
+    document.getElementById(
+      "attendanceTable"
+    );
+
+  table.innerHTML =
+    `<tr>
+      <td colspan="6">
+        Loading...
+      </td>
+    </tr>`;
+
+  google.script.run
+
+    .withSuccessHandler(function(records) {
+
+      if (
+        !records ||
+        records.length === 0
+      ) {
+
+        table.innerHTML =
+          `<tr>
+            <td colspan="6">
+              No attendance records today.
+            </td>
+          </tr>`;
+
+        return;
+      }
+
+      table.innerHTML =
+        records.map(record => `
+
+          <tr>
+
+            <td>
+              <strong>
+                ${escapeHtml(record.name)}
+              </strong>
+            </td>
+
+            <td>
+              ${escapeHtml(record.type)}
+            </td>
+
+            <td>
+              ${escapeHtml(record.date)}
+            </td>
+
+            <td>
+              ${escapeHtml(record.checkIn || "-")}
+            </td>
+
+            <td>
+              ${escapeHtml(record.checkOut || "-")}
+            </td>
+
+            <td>
+              ${escapeHtml(record.status)}
+            </td>
+
+          </tr>
+
+        `).join("");
+
+    })
+
+    .withFailureHandler(function(error) {
+
+      table.innerHTML =
+        `<tr>
+          <td colspan="6">
+            ${escapeHtml(
+              error.message ||
+              "Failed to load attendance."
+            )}
+          </td>
+        </tr>`;
+
+    })
+
+    .getTodayAttendance();
+}
+
+
+/* =====================================================
+   DASHBOARD
+===================================================== */
+
+function loadDashboard() {
+
+  google.script.run
+
+    .withSuccessHandler(function(data) {
+
+      document
+        .getElementById("statTotal")
+        .textContent =
+          data.totalPeople;
+
+      document
+        .getElementById("statStudents")
+        .textContent =
+          data.students;
+
+      document
+        .getElementById("statVisitors")
+        .textContent =
+          data.visitors;
+
+      document
+        .getElementById("statInside")
+        .textContent =
+          data.currentlyInside;
+
+    })
+
+    .withFailureHandler(function(error) {
+
+      console.error(error);
+
+    })
+
+    .getDashboardSummary();
+}
+
+
+/* =====================================================
+   MODAL
+===================================================== */
+
+function closeModal() {
+
+  document
+    .getElementById(
+      "registrationModal"
+    )
+    .classList.remove("show");
+}
+
+
+/* =====================================================
+   SECURITY / HTML ESCAPE
+===================================================== */
+
+function escapeHtml(value) {
+
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+  return String(value)
+
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+
+/* =====================================================
+   INITIAL LOAD
+===================================================== */
+
+window.addEventListener(
+  "load",
+  function() {
+
+    loadDashboard();
+
+  }
+);
+
+</script>
+
+</body>
+</html>
